@@ -120,6 +120,21 @@ def init_db():
                 wins BIGINT NOT NULL DEFAULT 0,
                 created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
             )
+                    conn.execute("""
+            CREATE TABLE IF NOT EXISTS star_orders (
+                payload TEXT PRIMARY KEY,
+                telegram_id BIGINT NOT NULL REFERENCES players(telegram_id),
+                case_id TEXT NOT NULL,
+                price INTEGER NOT NULL,
+                status TEXT NOT NULL DEFAULT 'pending',
+                telegram_payment_charge_id TEXT UNIQUE,
+                gift_id TEXT,
+                gift_name TEXT,
+                created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                paid_at TIMESTAMPTZ,
+                delivered_at TIMESTAMPTZ
+            )
+        """)
         """)
         conn.execute("""
             CREATE TABLE IF NOT EXISTS inventory (
