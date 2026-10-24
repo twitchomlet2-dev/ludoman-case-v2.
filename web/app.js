@@ -224,6 +224,16 @@ document.addEventListener("DOMContentLoaded", () => {
         prizeRarity.textContent = winningReward.rarity;
         prizeDesc.textContent = winningReward.desc;
 
+inventory.push({
+  icon: winningReward.icon,
+  name: winningReward.name,
+  desc: winningReward.desc,
+  rarity: winningReward.rarity,
+  date: Date.now()
+});
+
+saveInventory();
+        
         prize.classList.remove("lc-hidden");
         closeButton.classList.remove("lc-hidden");
 
