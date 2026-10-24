@@ -505,7 +505,7 @@ def create_star_invoice(
         "case_id": body.case_id,
         "price": case["price"],
     }
-    
+    @app.get("/api/me")
 def me(x_telegram_init_data: str = Header(default="")):
     player = get_player(x_telegram_init_data)
     telegram_id, first_name, last_name, username, balance, opens, spent, wins = player
