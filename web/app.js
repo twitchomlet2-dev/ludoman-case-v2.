@@ -1,6 +1,5 @@
 
 document.addEventListener("DOMContentLoaded", () => {
-  // Telegram Mini App
   const tg = window.Telegram?.WebApp;
 
   if (tg) {
@@ -8,7 +7,7 @@ document.addEventListener("DOMContentLoaded", () => {
     tg.expand();
   }
 
-  // Баланс
+  // Баланс и состояние прокрутки
   let balance = 1000;
   let opening = false;
   let spinTimer = null;
@@ -19,43 +18,127 @@ document.addEventListener("DOMContentLoaded", () => {
       balance = Math.max(0, Number(savedBalance));
     }
   } catch (error) {
-    console.log("Не удалось загрузить баланс", error);
+    console.log("Ошибка загрузки баланса", error);
   }
 
   // Инвентарь
   let inventory = [];
 
   try {
-    const savedInventory = JSON.parse(
+    const saved = JSON.parse(
       localStorage.getItem("ludoman_inventory") || "[]"
     );
 
-    if (Array.isArray(savedInventory)) {
-      inventory = savedInventory.filter(
-        item =>
-          item &&
-          typeof item.name === "string" &&
-          typeof item.icon === "string" &&
-          typeof item.rarity === "string" &&
-          typeof item.desc === "string"
+    if (Array.isArray(saved)) {
+      inventory = saved.filter(item =>
+        item &&
+        typeof item.name === "string" &&
+        typeof item.icon === "string" &&
+        typeof item.rarity === "string" &&
+        typeof item.desc === "string"
       );
     }
   } catch (error) {
-    console.log("Не удалось загрузить инвентарь", error);
+    console.log("Ошибка загрузки инвентаря", error);
   }
 
-  // Предметы
+  // Статистика открытий
+  let stats = {
+    opens: 0,
+    spent: 0,
+    wins: 0,
+    history: []
+  };
+
+  try {
+    const saved = JSON.parse(
+      localStorage.getItem("ludoman_stats") || "{}"
+    );
+
+    stats.opens = Math.max(0, Number(saved.opens) || 0);
+    stats.spent = Math.max(0, Number(saved.spent) || 0);
+    stats.wins = Math.max(0, Number(saved.wins) || 0);
+
+    if (Array.isArray(saved.history)) {
+      stats.history = saved.history
+        .filter(item =>
+          item &&
+          typeof item.name === "string" &&
+          typeof item.icon === "string"
+        )
+        .slice(-10);
+    }
+  } catch (error) {
+    console.log("Ошибка загрузки статистики", error);
+  }
+
+  function saveStats() {
+    try {
+      localStorage.setItem("ludoman_stats", JSON.stringify(stats));
+    } catch (error) {
+      console.log("Ошибка сохранения статистики", error);
+    }
+  }
+
+  // Данные игрока Telegram
+  const telegramUser = tg?.initDataUnsafe?.user;
+  const playerName = telegramUser
+    ? [telegramUser.first_name, telegramUser.last_name]
+        .filter(Boolean)
+        .join(" ")
+    : "Игрок LUDOMAN";
+
+  const playerId = telegramUser?.id
+    ? String(telegramUser.id)
+    : "Недоступен вне Telegram";
+
+  // Награды
   const rewards = [
-    { icon: "🪙", name: "Монеты", desc: "Награда за открытие кейса", rarity: "ОБЫЧНЫЙ" },
-    { icon: "💎", name: "Кристалл", desc: "Редкий коллекционный предмет", rarity: "РЕДКИЙ" },
-    { icon: "⚡", name: "Энергия", desc: "Энергия LUDOMAN", rarity: "ОБЫЧНЫЙ" },
-    { icon: "👑", name: "Корона", desc: "Особая награда", rarity: "ЭПИЧЕСКИЙ" },
-    { icon: "🎁", name: "Подарок", desc: "Сюрприз из кейса", rarity: "РЕДКИЙ" },
-    { icon: "🔥", name: "Огонь", desc: "Огненный предмет", rarity: "ЭПИЧЕСКИЙ" },
-    { icon: "🐉", name: "Дракон", desc: "Легендарная награда", rarity: "ЛЕГЕНДАРНЫЙ" }
+    {
+      icon: "🪙",
+      name: "Монеты",
+      desc: "Награда за открытие кейса",
+      rarity: "ОБЫЧНЫЙ"
+    },
+    {
+      icon: "💎",
+      name: "Кристалл",
+      desc: "Редкий коллекционный предмет",
+      rarity: "РЕДКИЙ"
+    },
+    {
+      icon: "⚡",
+      name: "Энергия",
+      desc: "Энергия LUDOMAN",
+      rarity: "ОБЫЧНЫЙ"
+    },
+    {
+      icon: "👑",
+      name: "Корона",
+      desc: "Особая награда",
+      rarity: "ЭПИЧЕСКИЙ"
+    },
+    {
+      icon: "🎁",
+      name: "Подарок",
+      desc: "Сюрприз из кейса",
+      rarity: "РЕДКИЙ"
+    },
+    {
+      icon: "🔥",
+      name: "Огонь",
+      desc: "Огненный предмет",
+      rarity: "ЭПИЧЕСКИЙ"
+    },
+    {
+      icon: "🐉",
+      name: "Дракон",
+      desc: "Легендарная награда",
+      rarity: "ЛЕГЕНДАРНЫЙ"
+    }
   ];
 
-  // Стили окна прокрутки и инвентаря
+  // Оформление
   const style = document.createElement("style");
 
   style.textContent = `
@@ -211,19 +294,27 @@ document.addEventListener("DOMContentLoaded", () => {
       cursor: pointer;
     }
 
-    .lc-inventory-button {
+    .lc-inventory-button,
+    .lc-profile-button {
       position: fixed;
-      right: 14px;
       bottom: 18px;
       z-index: 9998;
-      padding: 13px 16px;
+      padding: 12px 13px;
       border: 1px solid #b6ff00;
       border-radius: 14px;
       background: #10120c;
       color: #c5ff36;
       font-weight: 900;
-      font-size: 14px;
+      font-size: 13px;
       cursor: pointer;
+    }
+
+    .lc-inventory-button {
+      right: 12px;
+    }
+
+    .lc-profile-button {
+      left: 12px;
     }
 
     .lc-inventory-grid {
@@ -232,59 +323,138 @@ document.addEventListener("DOMContentLoaded", () => {
       gap: 10px;
     }
 
-    .lc-inventory-card {
+    .lc-inventory-card,
+    .lc-stat-card {
       min-width: 0;
-      padding: 14px 6px;
+      padding: 14px 8px;
       overflow-wrap: anywhere;
       border: 1px solid #373b2e;
       border-radius: 14px;
       background: #191c14;
     }
+
+    .lc-stat-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+      margin: 16px 0;
+    }
+
+    .lc-stat-number {
+      margin-top: 8px;
+      color: #c5ff36;
+      font-size: 25px;
+      font-weight: 900;
+    }
+
+    .lc-stat-label {
+      color: #aaa;
+      font-size: 12px;
+    }
+
+    .lc-player-name {
+      margin: 12px 0 6px;
+      font-size: 20px;
+      font-weight: 900;
+      overflow-wrap: anywhere;
+    }
+
+    .lc-player-id {
+      color: #aaa;
+      font-size: 12px;
+      overflow-wrap: anywhere;
+    }
+
+    .lc-history-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 0;
+      text-align: left;
+      border-bottom: 1px solid #303426;
+    }
+
+    .lc-history-icon {
+      font-size: 28px;
+    }
+
+    .lc-history-name {
+      font-weight: 800;
+    }
+
+    .lc-history-rarity {
+      margin-top: 4px;
+      color: #c5ff36;
+      font-size: 11px;
+    }
   `;
 
   document.head.appendChild(style);
 
-  // Баланс на экране
+  // Обновление баланса
   function updateBalance() {
-    const balanceElement = document.getElementById("balance");
+    const element = document.getElementById("balance");
 
-    if (balanceElement) {
-      balanceElement.textContent = balance.toLocaleString("ru-RU");
+    if (element) {
+      element.textContent = balance.toLocaleString("ru-RU");
     }
 
     try {
       localStorage.setItem("ludoman_balance", String(balance));
     } catch (error) {
-      console.log("Не удалось сохранить баланс", error);
+      console.log("Ошибка сохранения баланса", error);
     }
   }
 
-  // Сохранение инвентаря
+  // Кнопка инвентаря
   const inventoryButton = document.createElement("button");
   inventoryButton.className = "lc-inventory-button";
-  inventoryButton.textContent = "🎒 Инвентарь (0)";
   document.body.appendChild(inventoryButton);
 
   function saveInventory() {
     try {
       localStorage.setItem("ludoman_inventory", JSON.stringify(inventory));
     } catch (error) {
-      console.log("Не удалось сохранить инвентарь", error);
+      console.log("Ошибка сохранения инвентаря", error);
     }
 
     inventoryButton.textContent = `🎒 Инвентарь (${inventory.length})`;
   }
 
-  // Окно инвентаря
-  function showInventory() {
-    if (document.getElementById("lc-inventory-overlay")) return;
-
+  // Создание окна
+  function createOverlay(id) {
     const overlay = document.createElement("div");
-    overlay.id = "lc-inventory-overlay";
     overlay.className = "lc-overlay";
+    overlay.id = id;
 
     const panel = document.createElement("div");
     panel.className = "lc-panel";
+
+    overlay.appendChild(panel);
+    document.body.appendChild(overlay);
+
+    overlay.addEventListener("click", event => {
+      if (event.target === overlay) overlay.remove();
+    });
+
+    return { overlay, panel };
+  }
+
+  // Кнопка закрытия окна
+  function addCloseButton(panel, overlay) {
+    const close = document.createElement("button");
+    close.className = "lc-button";
+    close.textContent = "Закрыть";
+    close.style.marginTop = "16px";
+    close.addEventListener("click", () => overlay.remove());
+    panel.appendChild(close);
+  }
+
+  // Инвентарь
+  function showInventory() {
+    if (document.getElementById("lc-inventory-overlay")) return;
+
+    const { overlay, panel } = createOverlay("lc-inventory-overlay");
 
     const title = document.createElement("h2");
     title.className = "lc-title";
@@ -315,7 +485,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
         const name = document.createElement("div");
         name.textContent = item.name;
-        name.style.cssText = "font-weight:900;margin:8px 0;color:white;";
+        name.style.cssText = "font-weight:900;margin:8px 0;";
 
         const rarity = document.createElement("div");
         rarity.textContent = item.rarity;
@@ -328,25 +498,119 @@ document.addEventListener("DOMContentLoaded", () => {
       panel.appendChild(grid);
     }
 
-    const close = document.createElement("button");
-    close.className = "lc-button";
-    close.textContent = "Закрыть";
-    close.style.marginTop = "16px";
-    close.addEventListener("click", () => overlay.remove());
-
-    panel.appendChild(close);
-    overlay.appendChild(panel);
-    document.body.appendChild(overlay);
-
-    overlay.addEventListener("click", event => {
-      if (event.target === overlay) overlay.remove();
-    });
+    addCloseButton(panel, overlay);
   }
 
   inventoryButton.addEventListener("click", showInventory);
-  saveInventory();
 
-  // Создание предмета на ленте
+  // Кнопка профиля
+  const profileButton = document.createElement("button");
+  profileButton.className = "lc-profile-button";
+  profileButton.textContent = "👤 Профиль";
+  document.body.appendChild(profileButton);
+
+  // Окно профиля и статистики
+  function showProfile() {
+    if (document.getElementById("lc-profile-overlay")) return;
+
+    const { overlay, panel } = createOverlay("lc-profile-overlay");
+
+    const title = document.createElement("h2");
+    title.className = "lc-title";
+    title.textContent = "ПРОФИЛЬ ИГРОКА";
+
+    const avatar = document.createElement("div");
+    avatar.textContent = "👤";
+    avatar.style.fontSize = "54px";
+
+    const name = document.createElement("div");
+    name.className = "lc-player-name";
+    name.textContent = playerName;
+
+    const id = document.createElement("div");
+    id.className = "lc-player-id";
+    id.textContent = `Telegram ID: ${playerId}`;
+
+    panel.append(title, avatar, name, id);
+
+    const statsGrid = document.createElement("div");
+    statsGrid.className = "lc-stat-grid";
+
+    const statItems = [
+      ["🎁", stats.opens, "Открытий кейсов"],
+      ["🪙", stats.spent.toLocaleString("ru-RU"), "Монет потрачено"],
+      ["🏆", stats.wins, "Выиграно предметов"],
+      ["🎒", inventory.length, "Предметов в инвентаре"]
+    ];
+
+    statItems.forEach(([icon, value, label]) => {
+      const card = document.createElement("div");
+      card.className = "lc-stat-card";
+
+      const emoji = document.createElement("div");
+      emoji.textContent = icon;
+      emoji.style.fontSize = "25px";
+
+      const number = document.createElement("div");
+      number.className = "lc-stat-number";
+      number.textContent = String(value);
+
+      const caption = document.createElement("div");
+      caption.className = "lc-stat-label";
+      caption.textContent = label;
+
+      card.append(emoji, number, caption);
+      statsGrid.appendChild(card);
+    });
+
+    panel.appendChild(statsGrid);
+
+    const historyTitle = document.createElement("h3");
+    historyTitle.textContent = "ПОСЛЕДНИЕ ВЫИГРЫШИ";
+    historyTitle.style.cssText =
+      "margin:20px 0 10px;color:#c5ff36;font-size:15px;";
+
+    panel.appendChild(historyTitle);
+
+    if (stats.history.length === 0) {
+      const empty = document.createElement("p");
+      empty.textContent = "Здесь появятся твои выигрыши после открытия кейсов.";
+      empty.style.cssText = "color:#aaa;font-size:13px;";
+      panel.appendChild(empty);
+    } else {
+      stats.history.slice().reverse().forEach(item => {
+        const row = document.createElement("div");
+        row.className = "lc-history-row";
+
+        const icon = document.createElement("div");
+        icon.className = "lc-history-icon";
+        icon.textContent = item.icon;
+
+        const details = document.createElement("div");
+
+        const itemName = document.createElement("div");
+        itemName.className = "lc-history-name";
+        itemName.textContent = item.name;
+
+        const rarity = document.createElement("div");
+        rarity.className = "lc-history-rarity";
+        rarity.textContent = item.rarity || "НАГРАДА";
+
+        details.append(itemName, rarity);
+        row.append(icon, details);
+        panel.appendChild(row);
+      });
+    }
+
+    addCloseButton(panel, overlay);
+  }
+
+  profileButton.addEventListener("click", showProfile);
+
+  saveInventory();
+  updateBalance();
+
+  // Предмет на ленте
   function createTrackItem(reward) {
     const item = document.createElement("div");
     item.className = "lc-item";
@@ -381,17 +645,17 @@ document.addEventListener("DOMContentLoaded", () => {
 
     opening = true;
     balance -= price;
+
+    stats.opens += 1;
+    stats.spent += price;
+    saveStats();
     updateBalance();
 
     button.disabled = true;
     const oldButtonText = button.textContent;
     button.textContent = "Открываем...";
 
-    const overlay = document.createElement("div");
-    overlay.className = "lc-overlay";
-
-    const panel = document.createElement("div");
-    panel.className = "lc-panel";
+    const { overlay, panel } = createOverlay("lc-case-overlay");
 
     const title = document.createElement("h2");
     title.className = "lc-title";
@@ -433,19 +697,22 @@ document.addEventListener("DOMContentLoaded", () => {
     closeButton.className = "lc-button lc-hidden";
     closeButton.textContent = "Забрать и закрыть";
 
-    panel.append(title, subtitle, viewport, status, prize, closeButton);
-    overlay.appendChild(panel);
-    document.body.appendChild(overlay);
+    panel.append(
+      title,
+      subtitle,
+      viewport,
+      status,
+      prize,
+      closeButton
+    );
 
     let finished = false;
     let animation = null;
 
-    // Победитель выбирается один раз
     const winningIndex = 45;
     const winningReward = rewards[
       Math.floor(Math.random() * rewards.length)
     ];
-
     const totalItems = 55;
 
     for (let i = 0; i < totalItems; i++) {
@@ -465,9 +732,9 @@ document.addEventListener("DOMContentLoaded", () => {
         spinTimer = null;
       }
 
-      // Остановить анимацию в целевой позиции, если она ещё идёт
       if (animation) {
         animation.onfinish = null;
+        animation.oncancel = null;
         animation.cancel();
         animation = null;
       }
@@ -475,12 +742,9 @@ document.addEventListener("DOMContentLoaded", () => {
       const winningItem = track.children[winningIndex];
 
       if (winningItem) {
-        const itemCenter =
+        const center =
           winningItem.offsetLeft + winningItem.offsetWidth / 2;
-
-        const targetX = viewport.clientWidth / 2 - itemCenter;
-
-        // Зафиксировать ленту на победном предмете
+        const targetX = viewport.clientWidth / 2 - center;
         track.style.transform = `translateX(${targetX}px)`;
       }
 
@@ -489,19 +753,25 @@ document.addEventListener("DOMContentLoaded", () => {
       prizeName.textContent = winningReward.name;
       prizeRarity.textContent = winningReward.rarity;
       prizeDesc.textContent = winningReward.desc;
+
       prize.classList.remove("lc-hidden");
       closeButton.classList.remove("lc-hidden");
 
-      // Сохранить выигрыш в инвентаре
-      inventory.push({
+      const wonItem = {
         icon: winningReward.icon,
         name: winningReward.name,
         desc: winningReward.desc,
         rarity: winningReward.rarity,
         date: Date.now()
-      });
+      };
+
+      inventory.push(wonItem);
+      stats.wins += 1;
+      stats.history.push(wonItem);
+      stats.history = stats.history.slice(-10);
 
       saveInventory();
+      saveStats();
 
       if (tg?.HapticFeedback) {
         try {
@@ -512,26 +782,23 @@ document.addEventListener("DOMContentLoaded", () => {
       }
     }
 
-    closeButton.addEventListener("click", () => {
+    function closeCase() {
       if (!finished) return;
 
       overlay.remove();
       opening = false;
       button.disabled = false;
       button.textContent = oldButtonText;
-    });
+    }
+
+    closeButton.addEventListener("click", closeCase);
 
     overlay.addEventListener("click", event => {
-      // Не закрываем окно до завершения прокрутки
       if (event.target === overlay && finished) {
-        overlay.remove();
-        opening = false;
-        button.disabled = false;
-        button.textContent = oldButtonText;
+        closeCase();
       }
     });
 
-    // Начать анимацию после появления окна
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
         if (finished || !overlay.isConnected) return;
@@ -543,10 +810,9 @@ document.addEventListener("DOMContentLoaded", () => {
           return;
         }
 
-        const itemCenter =
+        const center =
           winningItem.offsetLeft + winningItem.offsetWidth / 2;
-
-        const targetX = viewport.clientWidth / 2 - itemCenter;
+        const targetX = viewport.clientWidth / 2 - center;
 
         try {
           animation = track.animate(
@@ -557,34 +823,4 @@ document.addEventListener("DOMContentLoaded", () => {
             {
               duration: 6500,
               easing: "cubic-bezier(.08,.65,.12,1)",
-              fill: "forwards"
-            }
-          );
-
-          animation.onfinish = finishSpin;
-          animation.oncancel = () => {
-            // Если анимацию отменило устройство или браузер,
-            // всё равно завершаем прокрутку и показываем выигрыш.
-            if (!finished) finishSpin();
-          };
-        } catch (error) {
-          console.log("Анимация недоступна, завершаем прокрутку", error);
-          finishSpin();
-        }
-
-        // Страховка: результат покажется даже если браузер
-        // не отправит событие окончания анимации.
-        spinTimer = setTimeout(finishSpin, 7500);
-      });
-    });
-  }
-
-  // Подключить все кнопки открытия кейсов
-  const caseButtons = document.querySelectorAll(".open-btn[data-price]");
-
-  caseButtons.forEach(button => {
-    button.addEventListener("click", () => openCase(button));
-  });
-
-  updateBalance();
-});
+              fill: "for
