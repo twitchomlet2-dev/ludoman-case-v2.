@@ -6,17 +6,20 @@ document.addEventListener("DOMContentLoaded", () => {
     tg.expand();
   }
 
-let balance = 1000;
+  let balance = 1000;
+  let opening = false;
 
-try {
-  const savedBalance = localStorage.getItem("ludoman_balance");
-
-  if (savedBalance !== null && Number.isFinite(Number(savedBalance))) {
-    balance = Number(savedBalance);
+  try {
+    const saved = localStorage.getItem("ludoman_balance");
+    if (saved !== null && Number.isFinite(Number(saved))) {
+      balance = Number(saved);
+    }
+  } catch (error) {
+    console.log("Ошибка загрузки баланса:", error);
   }
-} catch (error) {
-  console.log("Не удалось загрузить баланс:", error);
-}
+
+  const balanceElement = document.getElementById("balance");
+
   const rewards = [
     { icon: "🪙", name: "Монеты", desc: "Немного виртуальных монет!", rarity: "Обычный" },
     { icon: "💎", name: "Кристалл", desc: "Редкая демо-награда!", rarity: "Редкий" },
@@ -94,18 +97,15 @@ try {
   document.head.appendChild(style);
 
   function updateBalance() {
-  if (balanceElement) {
-    balanceElement.textContent = balance;
-  }
+    if (balanceElement) {
+      balanceElement.textContent = balance;
+    }
 
-  try {
-    localStorage.setItem("ludoman_balance", String(balance));
-  } catch (error) {
-    console.log("Не удалось сохранить баланс:", error);
-  }
-  }
-
-  localStorage.setItem("ludoman_balance", String(balance));
+    try {
+      localStorage.setItem("ludoman_balance", String(balance));
+    } catch (error) {
+      console.log("Ошибка сохранения баланса:", error);
+    }
   }
 
   function randomReward() {
@@ -131,8 +131,8 @@ try {
     opening = true;
     balance -= price;
     updateBalance();
-
     button.disabled = true;
+    button.textContent = "Открываем...";
 
     const overlay = document.createElement("div");
     overlay.className = "lc-overlay";
@@ -174,17 +174,17 @@ try {
     const totalItems = 55;
 
     for (let i = 0; i < totalItems; i++) {
-      const itemReward = i === winningIndex ? winningReward : randomReward();
+      const reward = i === winningIndex ? winningReward : randomReward();
       const item = document.createElement("div");
       item.className = "lc-item";
 
       const icon = document.createElement("div");
       icon.className = "lc-item-icon";
-      icon.textContent = itemReward.icon;
+      icon.textContent = reward.icon;
 
       const name = document.createElement("div");
       name.className = "lc-item-name";
-      name.textContent = itemReward.name;
+      name.textContent = reward.name;
 
       item.append(icon, name);
       track.appendChild(item);
@@ -197,33 +197,45 @@ try {
       button.textContent = `Открыть · ${price} 🪙`;
     });
 
-    button.textContent = "Открываем...";
+    const winningItem = track.children[winningIndex];
 
-    
-        track.style.transition = "transform 6s cubic-bezier(.08,.65,.12,1)";
-        track.style.transform = `translateX(${offset}px)`;
-      });
-  requestAnimationFrame(() => {
-  requestAnimationFrame(() => {
-    const itemWidth = 110;
-    const winnerCenter = winningIndex * itemWidth + 50;
-    const offset = viewport.clientWidth / 2 - winnerCenter;
+    requestAnimationFrame(() => {
+      const itemCenter =
+        winningItem.offsetLeft + winningItem.offsetWidth / 2;
+
+      const targetX = viewport.clientWidth / 2 - itemCenter;
+
+      const animation = track.animate(
+        [
+          { transform: "translateX(0px)" },
+          { transform: `translateX(${targetX}px)` }
+        ],
+        {
+          duration: 6500,
+          easing: "cubic-bezier(.08,.65,.12,1)",
+          fill: "forwards"
+        }
+      );
+
+      animation.onfinish = () => {
+        status.textContent = "ВЫИГРЫШ!";
+        prizeIcon.textContent = winningReward.icon;
+        prizeName.textContent = winningReward.name;
+        prizeRarity.textContent = winningReward.rarity;
+        prizeDesc.textContent = winningReward.desc;
+
+        prize.classList.remove("lc-hidden");
+        closeButton.classList.remove("lc-hidden");
+
+        if (tg?.HapticFeedback) {
+          tg.HapticFeedback.notificationOccurred("success");
+        }
+      };
+
+      animation.oncancel = () => {
+        status.textContent = "Анимация остановлена";
+      };
     });
-
-    track.addEventListener("transitionend", () => {
-      status.textContent = "ВЫИГРЫШ!";
-      prizeIcon.textContent = winningReward.icon;
-      prizeName.textContent = winningReward.name;
-      prizeRarity.textContent = winningReward.rarity;
-      prizeDesc.textContent = winningReward.desc;
-
-      prize.classList.remove("lc-hidden");
-      closeButton.classList.remove("lc-hidden");
-
-      if (tg?.HapticFeedback) {
-        tg.HapticFeedback.notificationOccurred("success");
-      }
-    }, { once: true });
   }
 
   document.querySelectorAll(".open-btn[data-price]").forEach((button) => {
@@ -231,5 +243,6 @@ try {
   });
 
   updateBalance();
-  console.log("LUDOMAN Case: анимация загружена!");
+  console.log("LUDOMAN Case: анимация и сохранение баланса загружены!");
 });
+  
