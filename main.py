@@ -269,6 +269,71 @@ async def telegram_webhook(request: Request):
 
 
 @app.get("/api/me")
+
+class StarCaseRequest(BaseModel):
+    case_id: str
+
+
+@app.post("/api/star/create")
+def create_star_invoice(
+    body: StarCaseRequest,
+    x_telegram_init_data: str = Header(default="")
+):
+    user = authenticate(x_telegram_init_data)
+    telegram_id = int(user["id"])
+
+    case = STAR_CASES.get(body.case_id)
+    if not case:
+        raise HTTPException(400, "Неизвестный кейс")
+
+    # Сначала убеждаемся, что игрок существует в базе.
+    get_player(x_telegram_init_data)
+
+    payload = secrets.token_urlsafe(24)
+
+    # Сохраняем заказ до создания счёта.
+    with connect_db() as conn:
+        conn.execute("""
+            INSERT INTO star_orders
+                (payload, telegram_id, case_id, price, status)
+            VALUES (%s, %s, %s, %s, 'pending')
+        """, (
+            payload,
+            telegram_id,
+            body.case_id,
+            case["price"],
+        ))
+
+    try:
+        invoice_url = telegram_api("createInvoiceLink", {
+            "title": case["title"],
+            "description": "Кейс LUDOMAN Case со случайным подарком",
+            "payload": payload,
+            "provider_token": "",
+            "currency": "XTR",
+            "prices": [{
+                "label": case["title"],
+                "amount": case["price"],
+            }],
+        })
+    except Exception:
+        with connect_db() as conn:
+            conn.execute("""
+                UPDATE star_orders
+                SET status = 'invoice_error'
+                WHERE payload = %s AND status = 'pending'
+            """, (payload,))
+        raise HTTPException(
+            502,
+            "Не удалось создать счёт Telegram. Попробуй ещё раз."
+        )
+
+    return {
+        "invoice_url": invoice_url,
+        "case_id": body.case_id,
+        "price": case["price"],
+    }
+    
 def me(x_telegram_init_data: str = Header(default="")):
     player = get_player(x_telegram_init_data)
     telegram_id, first_name, last_name, username, balance, opens, spent, wins = player
