@@ -3,52 +3,79 @@
 <html lang="ru">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover"
+  >
   <meta name="theme-color" content="#101010">
   <title>LUDOMAN CASE</title>
+
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
-  <link rel="stylesheet" href="/static/style.css?v=3">
+  <link rel="stylesheet" href="/static/style.css?v=4">
 </head>
+
 <body>
   <div id="app">
     <header class="top-bar">
-      <h1>🔥 LUDOMAN <span>CASE</span></h1>
+      <h1 class="logo">
+        🔥 LUDOMAN <span>CASE</span>
+      </h1>
+
       <div class="balance-box">
-        Баланс: <strong id="balance">0</strong> ⭐
+        <span>Баланс</span>
+        <strong id="balance">0 ⭐</strong>
       </div>
     </header>
 
     <div id="app-notice" class="notice hidden"></div>
 
     <main>
+      <!-- Вкладка кейсов -->
       <section id="cases-tab" class="tab-content">
-        <section id="ludoman-topup"></section>
         <section id="ludoman-cases"></section>
         <section id="case-animation"></section>
       </section>
 
+      <!-- Вкладка инвентаря -->
       <section id="inventory-tab" class="tab-content hidden">
         <section id="inventory"></section>
       </section>
 
-      <section id="profile-tab" class="tab-content hidden">
-        <section id="profile"></section>
+      <!-- Вкладка пополнения -->
+      <section id="topup-tab" class="tab-content hidden">
+        <section id="ludoman-topup"></section>
       </section>
     </main>
 
+    <!-- Нижнее меню: только три вкладки -->
     <nav class="bottom-menu">
-      <button type="button" class="active" data-tab="cases">
-        🎁 Кейсы
+      <button
+        type="button"
+        class="active"
+        data-tab="cases"
+      >
+        <span class="menu-icon">🎁</span>
+        <span>Кейсы</span>
       </button>
-      <button type="button" data-tab="inventory">
-        🎒 Инвентарь
+
+      <button
+        type="button"
+        data-tab="inventory"
+      >
+        <span class="menu-icon">🎒</span>
+        <span>Инвентарь</span>
       </button>
-      <button type="button" data-tab="profile">
-        👤 Профиль
+
+      <button
+        type="button"
+        data-tab="topup"
+      >
+        <span class="menu-icon">💳</span>
+        <span>Пополнение</span>
       </button>
     </nav>
   </div>
 
-  <script src="/static/app.js?v=3"></script>
+  <script src="/static/app.js?v=4"></script>
 </body>
 </html>
