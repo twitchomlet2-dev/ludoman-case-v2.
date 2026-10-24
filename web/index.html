@@ -1,17 +1,78 @@
+
 <!doctype html>
 <html lang="ru">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+  <meta name="theme-color" content="#0a0a0a">
   <title>LUDOMAN Case</title>
   <link rel="stylesheet" href="/static/style.css">
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
 </head>
 <body>
-  <main>
-    <h1>LUDOMAN Case</h1>
-    <p>Добро пожаловать!</p>
-    <p>Скоро здесь появятся кейсы.</p>
+  <header class="topbar">
+    <div class="brand"><span class="brand-mark">L</span> LUDOMAN <span class="lime">CASE</span></div>
+    <div class="balance">🪙 <span id="balance">1000</span></div>
+  </header>
+
+  <main class="container">
+    <section class="hero">
+      <div class="eyebrow">YOUR LUCK STARTS HERE</div>
+      <h1>ОТКРЫВАЙ.<br><span>ЗАБИРАЙ.</span></h1>
+      <p>Испытай удачу и найди свою награду</p>
+    </section>
+
+    <div class="section-heading">
+      <h2>Популярные кейсы</h2>
+      <span class="live-dot">● DEMO</span>
+    </div>
+
+    <section class="cases">
+      <article class="case-card">
+        <div class="case-art green-art">⚡</div>
+        <div class="case-info">
+          <h3>STARTER</h3>
+          <p>Кейс для новичков</p>
+          <button class="open-btn" data-price="100" data-case="STARTER">Открыть · 100 🪙</button>
+        </div>
+      </article>
+
+      <article class="case-card">
+        <div class="case-art purple-art">💎</div>
+        <div class="case-info">
+          <h3>CRYSTAL</h3>
+          <p>Время редких находок</p>
+          <button class="open-btn" data-price="300" data-case="CRYSTAL">Открыть · 300 🪙</button>
+        </div>
+      </article>
+
+      <article class="case-card">
+        <div class="case-art gold-art">👑</div>
+        <div class="case-info">
+          <h3>ROYAL</h3>
+          <p>Королевский шанс</p>
+          <button class="open-btn" data-price="500" data-case="ROYAL">Открыть · 500 🪙</button>
+        </div>
+      </article>
+    </section>
+
+    <section id="result" class="result hidden">
+      <div class="result-label">ТВОЯ НАГРАДА</div>
+      <div id="reward-icon" class="reward-icon">🎁</div>
+      <h2 id="reward-name">Награда</h2>
+      <p id="reward-desc">Демонстрационная награда</p>
+      <button id="close-result" class="open-btn">Круто!</button>
+    </section>
+
+    <p class="disclaimer">ДЕМО-РЕЖИМ · ВИРТУАЛЬНЫЕ МОНЕТЫ И НАГРАДЫ</p>
   </main>
+
+  <nav class="bottom-nav">
+    <div class="nav-item active">🎁<span>Кейсы</span></div>
+    <div class="nav-item">🏆<span>Награды</span></div>
+    <div class="nav-item">👤<span>Профиль</span></div>
+  </nav>
+
   <script src="/static/app.js"></script>
 </body>
 </html>
