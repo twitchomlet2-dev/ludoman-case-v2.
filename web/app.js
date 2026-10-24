@@ -6,9 +6,11 @@ document.addEventListener("DOMContentLoaded", () => {
     tg.expand();
   }
 
-  let balance = 1000;
-  let opening = false;
+const savedBalance = localStorage.getItem("ludoman_balance");
 
+let balance = savedBalance !== null
+  ? Number(savedBalance)
+  : 1000;
   const balanceElement = document.getElementById("balance");
 
   const rewards = [
@@ -88,7 +90,11 @@ document.addEventListener("DOMContentLoaded", () => {
   document.head.appendChild(style);
 
   function updateBalance() {
-    if (balanceElement) balanceElement.textContent = balance;
+  if (balanceElement) {
+    balanceElement.textContent = balance;
+  }
+
+  localStorage.setItem("ludoman_balance", String(balance));
   }
 
   function randomReward() {
