@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="ru">
 <head>
@@ -19,7 +20,7 @@
 
   <main id="app">
     <section class="cases-section">
-      <h2>🎁 Кейсы</h2>
+      <h2>🎮 Кейсы за монеты</h2>
       <div class="cases">
         <article class="case-card">
           <h3>🟢 Начальный</h3>
@@ -39,6 +40,48 @@
           <button class="open-btn" data-price="500">Открыть кейс</button>
         </article>
       </div>
+    </section>
+
+    <section class="stars-section">
+      <h2>⭐ Кейсы за Telegram Stars</h2>
+      <p class="muted">
+        Открытие за Stars — отдельная система.
+        Перед покупкой будет показана цена.
+      </p>
+
+      <div class="cases">
+        <article class="case-card">
+          <h3>🟢 LUDOMAN START</h3>
+          <p>Цена: 50 ⭐</p>
+          <p class="muted">Случайный подарок из доступного каталога</p>
+          <button class="star-case-btn" data-case-id="start" disabled>
+            Скоро
+          </button>
+        </article>
+
+        <article class="case-card">
+          <h3>💎 LUDOMAN PRO</h3>
+          <p>Цена: 100 ⭐</p>
+          <p class="muted">Случайный подарок из доступного каталога</p>
+          <button class="star-case-btn" data-case-id="pro" disabled>
+            Скоро
+          </button>
+        </article>
+
+        <article class="case-card">
+          <h3>👑 LUDOMAN VIP</h3>
+          <p>Цена: 250 ⭐</p>
+          <p class="muted">Случайный подарок из доступного каталога</p>
+          <button class="star-case-btn" data-case-id="vip" disabled>
+            Скоро
+          </button>
+        </article>
+      </div>
+
+      <p class="muted">
+        Подарок выдаётся только после подтверждения оплаты Telegram.
+        Доступность конкретных подарков зависит от Telegram Bot API.
+      </p>
     </section>
 
     <section id="case-animation"></section>
