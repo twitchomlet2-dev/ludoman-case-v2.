@@ -598,3 +598,59 @@ button:focus-visible {
     padding: 9px 8px;
   }
 }
+
+/* NFT-картинки в карточках кейсов */
+.case-art {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 145px;
+  padding: 8px;
+  margin-bottom: 12px;
+  overflow: hidden;
+  box-sizing: border-box;
+
+  border: 1px solid rgba(183, 255, 54, 0.15);
+  border-radius: 14px;
+
+  background:
+    radial-gradient(
+      circle at center,
+      rgba(183, 255, 54, 0.13),
+      transparent 70%
+    ),
+    linear-gradient(145deg, #171c16, #0c0e0c);
+}
+
+/* Само изображение */
+.case-art .case-image {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+
+  filter: drop-shadow(
+    0 5px 15px rgba(183, 255, 54, 0.12)
+  );
+
+  transition: transform 0.2s ease;
+}
+
+/* Лёгкое увеличение при наведении */
+.case-card:hover .case-image {
+  transform: scale(1.06);
+}
+
+/* Эмодзи, если изображение не загрузилось */
+.case-art .case-emoji {
+  font-size: 54px;
+}
+
+/* Для маленьких экранов */
+@media (max-width: 360px) {
+  .case-art {
+    height: 105px;
+  }
+}
