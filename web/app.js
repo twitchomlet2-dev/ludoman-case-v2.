@@ -638,7 +638,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
       const caseId = button.dataset.caseId;
       const prices = {
-        start: 50,
+        start: 1,
         pro: 100,
         vip: 250
       };
