@@ -13,103 +13,40 @@
 <body>
   <header class="top-bar">
     <h1>LUDOMAN <span>CASE</span></h1>
+
     <div class="balance-box">
-      Баланс: <span id="balance">0</span> 🪙
+      Баланс: <span id="balance">0</span> ⭐
     </div>
   </header>
 
   <main id="app">
+
+    <!-- Пополнение внутреннего баланса -->
+    <section id="ludoman-topup"></section>
+
+    <!-- Единственный список кейсов -->
     <section class="cases-section">
-      <h2>🎮 Кейсы за монеты</h2>
-      <div class="cases">
-        <article class="case-card">
-          <h3>🟢 Начальный</h3>
-          <p>Стоимость: 100 🪙</p>
-          <button class="open-btn" data-price="100">Открыть кейс</button>
-        </article>
-
-        <article class="case-card">
-          <h3>🔵 Редкий</h3>
-          <p>Стоимость: 250 🪙</p>
-          <button class="open-btn" data-price="250">Открыть кейс</button>
-        </article>
-
-        <article class="case-card">
-          <h3>🟣 Элитный</h3>
-          <p>Стоимость: 500 🪙</p>
-          <button class="open-btn" data-price="500">Открыть кейс</button>
-        </article>
-      </div>
-    </section>
-
-    <section class="stars-section">
-      <h2>⭐ Кейсы за Telegram Stars</h2>
+      <h2>🎮 Кейсы LUDOMAN</h2>
       <p class="muted">
-        Открытие за Stars — отдельная система.
-        Перед покупкой будет показана цена.
+        Кейсы открываются за внутренний баланс.
+        Пополни баланс через Telegram Stars.
       </p>
 
-      <div class="cases">
-  <article class="case-card">
-    <h3>🧪 LUDOMAN TEST</h3>
-<p>Цена: 1 ⭐</p>
-<p class="muted">Тестовый кейс для проверки оплаты</p>
-<button class="star-case-btn" data-case-id="start" type="button">
-  Купить за 1 ⭐
-</button>
-      class="star-case-btn"
-      data-case-id="start"
-      type="button"
-    >
-      Купить за 50 ⭐
-    </button>
-  </article>
+      <div id="ludoman-cases" class="cases"></div>
+    </section>
 
-  <article class="case-card">
-    <h3>💎 LUDOMAN PRO</h3>
-    <p>Цена: 100 ⭐</p>
-    <p class="muted">
-      Случайный подарок из доступного каталога
-    </p>
-    <button
-      class="star-case-btn"
-      data-case-id="pro"
-      type="button"
-    >
-      Купить за 100 ⭐
-    </button>
-  </article>
-
-  <article class="case-card">
-    <h3>👑 LUDOMAN VIP</h3>
-    <p>Цена: 250 ⭐</p>
-    <p class="muted">
-      Случайный подарок из доступного каталога
-    </p>
-    <button
-      class="star-case-btn"
-      data-case-id="vip"
-      type="button"
-    >
-      Купить за 250 ⭐
-    </button>
-  </article>
-</div>
-
-<p class="muted">
-  Подарок выдаётся после подтверждения оплаты Telegram.
-  Доступность подарков зависит от Telegram Bot API.
-</p>
-
+    <!-- Результат открытия кейса -->
     <section id="case-animation"></section>
 
+    <!-- Нижнее меню -->
     <nav class="bottom-menu">
-      <button id="inventory-btn">🎒 Инвентарь</button>
-      <button id="profile-btn">👤 Профиль</button>
+      <button id="inventory-btn" type="button">🎒 Инвентарь</button>
+      <button id="profile-btn" type="button">👤 Профиль</button>
     </nav>
 
     <section id="inventory"></section>
     <section id="profile"></section>
+
   </main>
 
   <script src="/static/app.js"></script>
