@@ -182,15 +182,15 @@ document.addEventListener("DOMContentLoaded", () => {
 
     button.textContent = "Открываем...";
 
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        const itemWidth = 110;
-        const winnerCenter = winningIndex * itemWidth + 50;
-        const offset = viewport.clientWidth / 2 - winnerCenter;
-
+    
         track.style.transition = "transform 6s cubic-bezier(.08,.65,.12,1)";
         track.style.transform = `translateX(${offset}px)`;
       });
+  requestAnimationFrame(() => {
+  requestAnimationFrame(() => {
+    const itemWidth = 110;
+    const winnerCenter = winningIndex * itemWidth + 50;
+    const offset = viewport.clientWidth / 2 - winnerCenter;
     });
 
     track.addEventListener("transitionend", () => {
