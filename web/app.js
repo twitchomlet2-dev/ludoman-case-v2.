@@ -10,14 +10,14 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   const CASES = [
-    { price: 5, name: "STARTER", emoji: "🎁", description: "Первый шанс" },
-    { price: 49, name: "BASIC", emoji: "📦", description: "Начни открытие" },
-    { price: 249, name: "CRYSTAL", emoji: "💎", description: "Больше ценности" },
-    { price: 499, name: "MYSTIC", emoji: "🔮", description: "Тайна внутри" },
-    { price: 999, name: "ROYAL", emoji: "👑", description: "Королевский кейс" },
-    { price: 1499, name: "FIRE", emoji: "🔥", description: "Жаркие награды" },
-    { price: 2499, name: "DRAGON", emoji: "🐉", description: "Сила дракона" },
-    { price: 4999, name: "LEGEND", emoji: "⚡", description: "Для настоящих легенд" }
+    { price: 5, name: "STARTER", emoji: "🎁", description: "Первый шанс", image: "/static/images/case-starter.webp" },
+    { price: 49, name: "BASIC", emoji: "📦", description: "Начни открытие", image: "/static/images/case-basic.webp" },
+    { price: 249, name: "CRYSTAL", emoji: "💎", description: "Больше ценности", image: "/static/images/case-crystal.webp" },
+    { price: 499, name: "MYSTIC", emoji: "🔮", description: "Тайна внутри", image: "/static/images/case-mystic.webp" },
+    { price: 999, name: "ROYAL", emoji: "👑", description: "Королевский кейс", image: "/static/images/case-royal.webp" },
+    { price: 1499, name: "FIRE", emoji: "🔥", description: "Жаркие награды", image: "/static/images/case-fire.webp" },
+    { price: 2499, name: "DRAGON", emoji: "🐉", description: "Сила дракона", image: "/static/images/case-dragon.webp" },
+    { price: 4999, name: "LEGEND", emoji: "⚡", description: "Для настоящих легенд", image: "/static/images/case-legend.webp" }
   ];
 
   const $ = (selector) => document.querySelector(selector);
@@ -78,6 +78,7 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 
     let data = {};
+
     try {
       data = await response.json();
     } catch {
@@ -99,6 +100,7 @@ document.addEventListener("DOMContentLoaded", () => {
       );
       return false;
     }
+
     return true;
   }
 
@@ -116,11 +118,21 @@ document.addEventListener("DOMContentLoaded", () => {
         ${CASES.map((item) => `
           <article class="case-card">
             <div class="case-art">
-              <span class="case-emoji">${item.emoji}</span>
+              <img
+                class="case-image"
+                src="${item.image}"
+                alt="${item.name}"
+                loading="lazy"
+              >
+              <span class="case-emoji" style="display:none">
+                ${item.emoji}
+              </span>
             </div>
+
             <h3 class="case-name">${item.name}</h3>
             <div class="case-description">${item.description}</div>
             <div class="case-price">${formatNumber(item.price)} ⭐</div>
+
             <button
               type="button"
               class="case-open-button"
@@ -132,6 +144,17 @@ document.addEventListener("DOMContentLoaded", () => {
         `).join("")}
       </div>
     `;
+
+    target.querySelectorAll(".case-image").forEach((img) => {
+      img.addEventListener("error", () => {
+        img.style.display = "none";
+
+        const fallback = img.nextElementSibling;
+        if (fallback) {
+          fallback.style.display = "block";
+        }
+      }, { once: true });
+    });
   }
 
   function renderTopup() {
@@ -169,6 +192,7 @@ document.addEventListener("DOMContentLoaded", () => {
         <label class="form-label" for="custom-topup">
           Или введи другую сумму Stars
         </label>
+
         <input
           class="text-input"
           id="custom-topup"
@@ -180,7 +204,11 @@ document.addEventListener("DOMContentLoaded", () => {
           placeholder="От 50 до 10000"
         >
 
-        <button type="button" class="primary-button topup-submit" id="topup-submit">
+        <button
+          type="button"
+          class="primary-button topup-submit"
+          id="topup-submit"
+        >
           Пополнить на ${formatNumber(selectedTopup)} ⭐
         </button>
 
@@ -193,6 +221,7 @@ document.addEventListener("DOMContentLoaded", () => {
     target.querySelectorAll("[data-topup-amount]").forEach((button) => {
       button.addEventListener("click", () => {
         selectedTopup = Number(button.dataset.topupAmount);
+
         const customInput = $("#custom-topup");
         if (customInput) customInput.value = "";
 
@@ -209,11 +238,14 @@ document.addEventListener("DOMContentLoaded", () => {
 
     $("#custom-topup")?.addEventListener("input", (event) => {
       const value = Number(event.target.value);
+
       if (Number.isInteger(value) && value > 0) {
         selectedTopup = value;
+
         target.querySelectorAll("[data-topup-amount]").forEach((option) => {
           option.classList.remove("selected");
         });
+
         updateTopupButton();
       }
     });
@@ -223,6 +255,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function updateTopupButton() {
     const button = $("#topup-submit");
+
     if (button) {
       button.textContent = `Пополнить на ${formatNumber(selectedTopup)} ⭐`;
     }
@@ -242,12 +275,17 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     if (!tg?.openInvoice) {
-      notify("Не удалось открыть оплату. Запусти приложение внутри Telegram.", "error");
+      notify(
+        "Не удалось открыть оплату. Запусти приложение внутри Telegram.",
+        "error"
+      );
       return;
     }
 
     busy = true;
+
     const button = $("#topup-submit");
+
     if (button) {
       button.disabled = true;
       button.textContent = "Создаём платёж...";
@@ -265,10 +303,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
       tg.openInvoice(result.invoice_url, async (status) => {
         if (status === "paid") {
-          notify(
-            "Платёж подтверждён. Обновляем баланс...",
-            "success"
-          );
+          notify("Платёж подтверждён. Обновляем баланс...", "success");
           await refreshData();
         } else if (status === "cancelled") {
           notify("Оплата отменена.");
@@ -280,6 +315,7 @@ document.addEventListener("DOMContentLoaded", () => {
       notify(error.message || "Не удалось создать платёж.", "error");
     } finally {
       busy = false;
+
       if (button) {
         button.disabled = false;
         updateTopupButton();
@@ -303,7 +339,9 @@ document.addEventListener("DOMContentLoaded", () => {
       return;
     }
 
-    const name = reward.name || reward.title || reward.item_name || "Новая награда";
+    const name =
+      reward.name || reward.title || reward.item_name || "Новая награда";
+
     const emoji = reward.emoji || reward.icon || "🎁";
     const value = reward.sell_price ?? reward.value ?? reward.price;
 
@@ -312,15 +350,22 @@ document.addEventListener("DOMContentLoaded", () => {
         <div class="muted">Кейс за ${formatNumber(price)} ⭐</div>
         <div class="reward-icon">${escapeHTML(emoji)}</div>
         <h3 class="reward-title">${escapeHTML(name)}</h3>
+
         ${value !== undefined ? `
           <div class="reward-value">
             Цена продажи: ${formatNumber(value)}
           </div>
         ` : ""}
+
         <p class="page-subtitle" style="margin:12px 0 0">
           Награда получена. Она должна появиться в инвентаре.
         </p>
-        <button type="button" class="secondary-button" id="reward-to-inventory">
+
+        <button
+          type="button"
+          class="secondary-button"
+          id="reward-to-inventory"
+        >
           Перейти в инвентарь
         </button>
       </div>
@@ -336,20 +381,27 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!requireTelegram()) return;
 
     const item = CASES.find((entry) => entry.price === price);
+
     if (!item) {
       notify("Неизвестный кейс.", "error");
       return;
     }
 
     if (currentBalance < price) {
-      notify("Недостаточно средств. Перейди во вкладку «Пополнение».", "error");
+      notify(
+        "Недостаточно средств. Перейди во вкладку «Пополнение».",
+        "error"
+      );
       return;
     }
 
     busy = true;
+
     const buttons = document.querySelectorAll("[data-open-case]");
+
     buttons.forEach((button) => {
       button.disabled = true;
+
       if (Number(button.dataset.openCase) === price) {
         button.textContent = "Открываем...";
       }
@@ -377,6 +429,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
       showReward(reward, price);
       await refreshData();
+
       notify("Кейс открыт!", "success");
     } catch (error) {
       notify(error.message || "Не удалось открыть кейс.", "error");
@@ -388,7 +441,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function updateBalance(value) {
     currentBalance = Number(value) || 0;
+
     const target = $("#balance");
+
     if (target) {
       target.textContent = `${formatNumber(currentBalance)} ⭐`;
     }
@@ -403,26 +458,38 @@ document.addEventListener("DOMContentLoaded", () => {
     if (inventory.length === 0) {
       target.innerHTML = `
         <h2 class="page-heading">Мой <span class="highlight">инвентарь</span></h2>
-        <p class="page-subtitle">Все полученные предметы будут храниться здесь.</p>
+        <p class="page-subtitle">
+          Все полученные предметы будут храниться здесь.
+        </p>
+
         <div class="empty-state">
           <span class="empty-icon">🎒</span>
           Инвентарь пока пуст.
           <br>
           Открой кейс, чтобы получить первую награду.
           <br><br>
-          <button type="button" class="primary-button" id="inventory-to-cases">
+          <button
+            type="button"
+            class="primary-button"
+            id="inventory-to-cases"
+          >
             Смотреть кейсы
           </button>
         </div>
       `;
 
-      $("#inventory-to-cases")?.addEventListener("click", () => showTab("cases"));
+      $("#inventory-to-cases")?.addEventListener("click", () => {
+        showTab("cases");
+      });
+
       return;
     }
 
     target.innerHTML = `
       <h2 class="page-heading">Мой <span class="highlight">инвентарь</span></h2>
-      <p class="page-subtitle">Твои предметы и доступная стоимость продажи.</p>
+      <p class="page-subtitle">
+        Твои предметы и доступная стоимость продажи.
+      </p>
 
       <div class="inventory-summary">
         <span>Предметов в инвентаре</span>
@@ -432,14 +499,18 @@ document.addEventListener("DOMContentLoaded", () => {
       <div class="inventory-list">
         ${inventory.map((item) => {
           const id = item.id ?? item.item_id;
-          const name = item.name || item.title || item.item_name || "Предмет";
+          const name =
+            item.name || item.title || item.item_name || "Предмет";
+
           const emoji = item.emoji || item.icon || "🎁";
           const sellPrice = Number(item.sell_price ?? item.value ?? 0);
-          const canSell = id !== undefined && id !== null && sellPrice > 0;
+          const canSell =
+            id !== undefined && id !== null && sellPrice > 0;
 
           return `
             <article class="inventory-item">
               <div class="item-icon">${escapeHTML(emoji)}</div>
+
               <div class="item-info">
                 <h3 class="item-name">${escapeHTML(name)}</h3>
                 <div class="item-price">
@@ -448,6 +519,7 @@ document.addEventListener("DOMContentLoaded", () => {
                     : "Предмет получен"}
                 </div>
               </div>
+
               ${canSell ? `
                 <button
                   type="button"
@@ -464,7 +536,9 @@ document.addEventListener("DOMContentLoaded", () => {
     `;
 
     target.querySelectorAll("[data-sell-item]").forEach((button) => {
-      button.addEventListener("click", () => sellItem(button.dataset.sellItem, button));
+      button.addEventListener("click", () => {
+        sellItem(button.dataset.sellItem, button);
+      });
     });
   }
 
@@ -504,7 +578,10 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 
     const activeSection = $(`#${name}-tab`);
-    if (activeSection) activeSection.classList.remove("hidden");
+
+    if (activeSection) {
+      activeSection.classList.remove("hidden");
+    }
 
     document.querySelectorAll(".bottom-menu [data-tab]").forEach((button) => {
       button.classList.toggle("active", button.dataset.tab === name);
@@ -531,12 +608,17 @@ document.addEventListener("DOMContentLoaded", () => {
       updateBalance(balance);
       renderInventory(data.inventory || []);
     } catch (error) {
-      notify(error.message || "Не удалось загрузить данные аккаунта.", "error");
+      notify(
+        error.message || "Не удалось загрузить данные аккаунта.",
+        "error"
+      );
     }
   }
 
   document.querySelectorAll(".bottom-menu [data-tab]").forEach((button) => {
-    button.addEventListener("click", () => showTab(button.dataset.tab));
+    button.addEventListener("click", () => {
+      showTab(button.dataset.tab);
+    });
   });
 
   $("#ludoman-cases")?.addEventListener("click", (event) => {
@@ -552,4 +634,4 @@ document.addEventListener("DOMContentLoaded", () => {
   showTab("cases");
   refreshData();
 });
-            
+                 
