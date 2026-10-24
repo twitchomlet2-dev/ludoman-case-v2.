@@ -731,7 +731,93 @@ def open_case(
             WHERE telegram_id = %s
         """, (telegram_id,)).fetchone()[0]
 
-    return {
+        return {
         "star_balance": new_balance,
         "balance": new_balance,
         "reward": reward,
+    }
+
+
+class SellItemRequest(BaseModel):
+    item_id: int = Field(gt=0)
+
+
+@app.post("/api/inventory/sell")
+def sell_inventory_item(
+    body: SellItemRequest,
+    x_telegram_init_data: str = Header(default=""),
+):
+    player = get_player(x_telegram_init_data)
+    telegram_id = player[0]
+
+    with connect_db() as conn:
+        item = conn.execute("""
+            SELECT id, sell_price
+            FROM inventory
+            WHERE id = %s
+              AND telegram_id = %s
+              AND sold_at IS NULL
+            FOR UPDATE
+        """, (body.item_id, telegram_id)).fetchone()
+
+        if not item:
+            raise HTTPException(404, "Подарок не найден или уже продан")
+
+        item_id, sell_price = item
+
+        if sell_price <= 0:
+            raise HTTPException(400, "Этот предмет нельзя продать")
+
+        updated = conn.execute("""
+            UPDATE inventory
+            SET sold_at = NOW()
+            WHERE id = %s
+              AND telegram_id = %s
+              AND sold_at IS NULL
+            RETURNING id
+        """, (item_id, telegram_id)).fetchone()
+
+        if not updated:
+            raise HTTPException(409, "Предмет уже продан")
+
+        balance_row = conn.execute("""
+            UPDATE players
+            SET star_balance = star_balance + %s
+            WHERE telegram_id = %s
+            RETURNING star_balance
+        """, (sell_price, telegram_id)).fetchone()
+
+        if not balance_row:
+            raise HTTPException(500, "Не удалось обновить баланс")
+
+        new_balance = balance_row[0]
+
+    return {
+        "ok": True,
+        "item_id": item_id,
+        "sold_for": sell_price,
+        "star_balance": new_balance,
+    }
+
+
+@app.get("/api/leaderboard")
+def leaderboard():
+    with connect_db() as conn:
+        rows = conn.execute("""
+            SELECT telegram_id, first_name, username, opens, wins
+            FROM players
+            ORDER BY wins DESC, opens DESC
+            LIMIT 20
+        """).fetchall()
+
+    return {
+        "players": [
+            {
+                "id": row[0],
+                "name": row[2] or row[1],
+                "opens": row[3],
+                "wins": row[4],
+            }
+            for row in rows
+        ]
+    }
