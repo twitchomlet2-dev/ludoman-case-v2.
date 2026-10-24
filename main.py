@@ -49,6 +49,32 @@ def telegram_api(method: str, payload: dict):
         raise RuntimeError(f"Telegram API error: {result.get('description', 'unknown')}")
 
     return result["result"]
+    
+@app.get("/api/star/gifts")
+def get_star_gifts(x_telegram_init_data: str = Header(default="")):
+    authenticate(x_telegram_init_data)
+
+    try:
+        result = telegram_api("getAvailableGifts", {})
+        gifts = result.get("gifts", [])
+
+        return {
+            "gifts": [
+                {
+                    "id": str(gift["id"]),
+                    "stars": gift.get("star_count", 0),
+                    "emoji": gift.get("sticker", {}).get("emoji", "🎁"),
+                }
+                for gift in gifts
+            ]
+        }
+    except Exception as exc:
+        print(f"Ошибка каталога подарков: {exc}")
+        raise HTTPException(
+            502,
+            "Не удалось получить каталог подарков Telegram"
+        )
+        
 
 
 def setup_telegram_webhook():
