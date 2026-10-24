@@ -614,6 +614,7 @@ def create_topup_invoice(
 # PLAYER PROFILE AND INVENTORY
 # ============================================================
 
+
 @app.get("/api/me")
 def me(x_telegram_init_data: str = Header(default="")):
     player = get_player(x_telegram_init_data)
@@ -639,7 +640,10 @@ def me(x_telegram_init_data: str = Header(default="")):
                 description,
                 rarity,
                 created_at,
-                sell_price
+                sell_price,
+                reward_type,
+                gift_id,
+                delivery_status
             FROM inventory
             WHERE telegram_id = %s
               AND sold_at IS NULL
@@ -670,10 +674,15 @@ def me(x_telegram_init_data: str = Header(default="")):
                 "rarity": row[4],
                 "date": row[5].isoformat(),
                 "sell_price": row[6],
+                "reward_type": row[7],
+                "gift_id": row[8],
+                "delivery_status": row[9],
             }
             for row in items
         ],
     }
+
+
 
 
 # ============================================================
