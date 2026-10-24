@@ -12,18 +12,23 @@ import psycopg
 from fastapi import FastAPI, Header, HTTPException, Request
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 BASE_DIR = Path(__file__).resolve().parent
 WEB_DIR = BASE_DIR / "web"
 
 BOT_TOKEN = os.environ.get("BOT_TOKEN", "")
 DATABASE_URL = os.environ.get("DATABASE_URL", "")
-TELEGRAM_WEBHOOK_SECRET = os.environ.get(
-    "TELEGRAM_WEBHOOK_SECRET", ""
-)
+TELEGRAM_WEBHOOK_SECRET = os.environ.get("TELEGRAM_WEBHOOK_SECRET", "")
 
 app = FastAPI(title="LUDOMAN Case")
+
+# Цены кейсов во внутренних Telegram Stars.
+# Если цена кейса изменится, поменяй её здесь и в интерфейсе.
+CASE_PRICES = {50, 100, 250, 500}
+
+MIN_TOPUP = 50
+MAX_TOPUP = 10000
 
 REWARDS = [
     {"icon": "🪙", "name": "Монеты", "desc": "Награда за открытие кейса", "rarity": "ОБЫЧНЫЙ"},
@@ -34,14 +39,6 @@ REWARDS = [
     {"icon": "🔥", "name": "Огонь", "desc": "Огненный предмет", "rarity": "ЭПИЧЕСКИЙ"},
     {"icon": "🐉", "name": "Дракон", "desc": "Легендарная награда", "rarity": "ЛЕГЕНДАРНЫЙ"},
 ]
-
-CASE_PRICES = {100, 250, 500}
-
-STAR_CASES = {
-    "start": {"title": "LUDOMAN START", "price": 1},
-    "pro": {"title": "LUDOMAN PRO", "price": 100},
-    "vip": {"title": "LUDOMAN VIP", "price": 250},
-}
 
 
 def telegram_api(method: str, payload: dict):
@@ -83,11 +80,18 @@ def init_db():
                 last_name TEXT NOT NULL DEFAULT '',
                 username TEXT NOT NULL DEFAULT '',
                 balance BIGINT NOT NULL DEFAULT 1000,
+                star_balance BIGINT NOT NULL DEFAULT 0,
                 opens BIGINT NOT NULL DEFAULT 0,
                 spent BIGINT NOT NULL DEFAULT 0,
                 wins BIGINT NOT NULL DEFAULT 0,
                 created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
             )
+        """)
+
+        # Безопасное расширение существующей базы.
+        conn.execute("""
+            ALTER TABLE players
+            ADD COLUMN IF NOT EXISTS star_balance BIGINT NOT NULL DEFAULT 0
         """)
 
         conn.execute("""
@@ -118,6 +122,12 @@ def init_db():
             )
         """)
 
+        # Дополнительные поля для новых заказов пополнения.
+        conn.execute("""
+            ALTER TABLE star_orders
+            ADD COLUMN IF NOT EXISTS order_type TEXT NOT NULL DEFAULT 'legacy'
+        """)
+
 
 def authenticate(init_data: str):
     if not BOT_TOKEN:
@@ -130,8 +140,10 @@ def authenticate(init_data: str):
         received_hash = fields.pop("hash")
         auth_date = int(fields["auth_date"])
 
-        if abs(int(time.time()) - auth_date) > 86400:
+        if int(time.time()) - auth_date > 86400:
             raise ValueError("Устаревшие данные Telegram")
+        if auth_date - int(time.time()) > 60:
+            raise ValueError("Некорректная дата Telegram")
 
         check_string = "\n".join(
             f"{key}={value}" for key, value in sorted(fields.items())
@@ -157,6 +169,8 @@ def authenticate(init_data: str):
             raise ValueError("Неверный ID")
         return user
 
+    except HTTPException:
+        raise
     except Exception:
         raise HTTPException(401, "Не удалось проверить данные Telegram")
 
@@ -180,7 +194,7 @@ def get_player(init_data: str):
 
         player = conn.execute("""
             SELECT telegram_id, first_name, last_name, username,
-                   balance, opens, spent, wins
+                   balance, star_balance, opens, spent, wins
             FROM players WHERE telegram_id = %s
         """, (telegram_id,)).fetchone()
 
@@ -194,7 +208,7 @@ def setup_telegram_webhook():
 
     try:
         result = telegram_api("setWebhook", {
-            "url": "https://ludoman-case-v2.onrender.com/telegram/webhook",
+            "url": "https://ludom an-case-v2.onrender.com/telegram/webhook".replace(" ", ""),
             "secret_token": TELEGRAM_WEBHOOK_SECRET,
             "allowed_updates": ["message", "pre_checkout_query"],
         })
@@ -225,28 +239,6 @@ def health():
     return {"status": "ok", "app": "LUDOMAN Case"}
 
 
-@app.get("/api/star/gifts")
-def get_star_gifts(x_telegram_init_data: str = Header(default="")):
-    authenticate(x_telegram_init_data)
-    try:
-        result = telegram_api("getAvailableGifts", {})
-        return {
-            "gifts": [
-                {
-                    "id": str(gift["id"]),
-                    "stars": gift.get("star_count", 0),
-                    "emoji": gift.get("sticker", {}).get("emoji", "🎁"),
-                }
-                for gift in result.get("gifts", [])
-            ]
-        }
-    except Exception as exc:
-        print(f"Ошибка каталога подарков: {exc}")
-        raise HTTPException(
-            502, "Не удалось получить каталог подарков Telegram"
-        )
-
-
 @app.post("/telegram/webhook")
 async def telegram_webhook(request: Request):
     if not TELEGRAM_WEBHOOK_SECRET:
@@ -260,13 +252,15 @@ async def telegram_webhook(request: Request):
 
     update = await request.json()
 
+    # Подтверждение платежа до списания Stars Telegram.
     query = update.get("pre_checkout_query")
     if query:
         payload = query.get("invoice_payload", "")
         with connect_db() as conn:
             order = conn.execute("""
                 SELECT telegram_id, price, status
-                FROM star_orders WHERE payload = %s
+                FROM star_orders
+                WHERE payload = %s
             """, (payload,)).fetchone()
 
         valid = bool(
@@ -277,7 +271,10 @@ async def telegram_webhook(request: Request):
             and order[2] == "pending"
         )
 
-        answer = {"pre_checkout_query_id": query["id"], "ok": valid}
+        answer = {
+            "pre_checkout_query_id": query["id"],
+            "ok": valid,
+        }
         if not valid:
             answer["error_message"] = "Заказ недействителен. Создай новый."
 
@@ -293,7 +290,7 @@ async def telegram_webhook(request: Request):
             "chat_id": chat["id"],
             "text": (
                 "🔥 Добро пожаловать в LUDOMAN Case!\n\n"
-                "Открывай приложение и собирай свою коллекцию."
+                "Открой приложение, пополни баланс Stars и собирай коллекцию."
             ),
         })
         return {"ok": True}
@@ -311,137 +308,139 @@ async def telegram_webhook(request: Request):
     if not payload or not charge_id or not telegram_id:
         return {"ok": True}
 
+    # ВАЖНО: начисление баланса и перевод заказа в credited происходят
+    # в одной транзакции. Повторный webhook не начислит Stars второй раз.
     with connect_db() as conn:
         order = conn.execute("""
-            SELECT telegram_id, price, status
-            FROM star_orders WHERE payload = %s FOR UPDATE
+            SELECT telegram_id, price, status, order_type
+            FROM star_orders
+            WHERE payload = %s
+            FOR UPDATE
         """, (payload,)).fetchone()
 
         if not order:
+            print(f"Оплата получена для неизвестного заказа: {payload}")
             return {"ok": True}
 
+        order_user_id, order_price, status, order_type = order
+
         if (
-            order[0] != telegram_id
-            or order[1] != amount
+            order_user_id != telegram_id
+            or order_price != amount
             or currency != "XTR"
-            or order[2] != "pending"
         ):
+            print(f"Несовпадение данных оплаты: {payload}")
+            return {"ok": True}
+
+        if status != "pending":
+            # Уже обработан: повторно не начисляем.
+            return {"ok": True}
+
+        if order_type != "topup":
+            # Старые заказы покупки подарков не обрабатываем новым способом.
+            print(f"Пропущен старый тип заказа: {payload}")
             return {"ok": True}
 
         conn.execute("""
+            UPDATE players
+            SET star_balance = star_balance + %s
+            WHERE telegram_id = %s
+        """, (amount, telegram_id))
+
+        updated = conn.execute("""
             UPDATE star_orders
-            SET status = 'paid',
+            SET status = 'credited',
                 telegram_payment_charge_id = %s,
                 paid_at = NOW()
             WHERE payload = %s AND status = 'pending'
-        """, (charge_id, payload))
+            RETURNING payload
+        """, (charge_id, payload)).fetchone()
 
-    # Отправка подарка требует проверки поддержки метода Telegram Bot API.
+        if not updated:
+            raise RuntimeError("Не удалось зафиксировать оплату")
+
     try:
-        result = telegram_api("getAvailableGifts", {})
-        gifts = result.get("gifts", [])
-        if not gifts:
-            raise RuntimeError("Нет доступных подарков Telegram")
-
-        gift = secrets.choice(gifts)
-        gift_id = str(gift["id"])
-
-        telegram_api("sendGift", {
-            "user_id": telegram_id,
-            "gift_id": gift_id,
-        })
-
-        with connect_db() as conn:
-            conn.execute("""
-                UPDATE star_orders
-                SET status = 'delivered',
-                    gift_id = %s,
-                    gift_name = %s,
-                    delivered_at = NOW()
-                WHERE payload = %s AND status = 'paid'
-            """, (
-                gift_id,
-                gift.get("sticker", {}).get("emoji", "Telegram Gift"),
-                payload,
-            ))
-
         telegram_api("sendMessage", {
             "chat_id": telegram_id,
-            "text": "🎉 Оплата получена! Подарок отправлен.",
+            "text": (
+                f"✅ Баланс пополнен на {amount} Stars!\n"
+                "Открой LUDOMAN Case, чтобы использовать баланс."
+            ),
         })
-
     except Exception as exc:
-        print(f"Ошибка выдачи подарка для заказа {payload}: {exc}")
-        with connect_db() as conn:
-            conn.execute("""
-                UPDATE star_orders SET status = 'delivery_failed'
-                WHERE payload = %s AND status = 'paid'
-            """, (payload,))
+        # Не отменяем начисление, если не удалось отправить уведомление.
+        print(f"Не удалось отправить уведомление об оплате: {exc}")
 
     return {"ok": True}
 
 
-class StarCaseRequest(BaseModel):
-    case_id: str
+class TopupRequest(BaseModel):
+    amount: int = Field(ge=MIN_TOPUP, le=MAX_TOPUP)
 
 
-@app.post("/api/star/create")
-def create_star_invoice(
-    body: StarCaseRequest,
+@app.post("/api/star/topup")
+def create_topup_invoice(
+    body: TopupRequest,
     x_telegram_init_data: str = Header(default=""),
 ):
     user = authenticate(x_telegram_init_data)
     telegram_id = int(user["id"])
-
-    case = STAR_CASES.get(body.case_id)
-    if not case:
-        raise HTTPException(400, "Неизвестный кейс")
+    amount = body.amount
 
     get_player(x_telegram_init_data)
-    payload = secrets.token_urlsafe(24)
+    payload = secrets.token_urlsafe(32)
 
     with connect_db() as conn:
         conn.execute("""
-            INSERT INTO star_orders (payload, telegram_id, case_id, price, status)
-            VALUES (%s, %s, %s, %s, 'pending')
-        """, (payload, telegram_id, body.case_id, case["price"]))
+            INSERT INTO star_orders
+                (payload, telegram_id, case_id, price, status, order_type)
+            VALUES (%s, %s, 'topup', %s, 'pending', 'topup')
+        """, (payload, telegram_id, amount))
 
     try:
         invoice_url = telegram_api("createInvoiceLink", {
-            "title": case["title"],
-            "description": "Кейс LUDOMAN Case со случайным подарком",
+            "title": "Пополнение LUDOMAN Case",
+            "description": f"Пополнение внутреннего баланса на {amount} Stars",
             "payload": payload,
             "provider_token": "",
             "currency": "XTR",
-            "prices": [{"label": case["title"], "amount": case["price"]}],
+            "prices": [{
+                "label": f"{amount} Stars на баланс",
+                "amount": amount,
+            }],
         })
     except Exception as exc:
         print(f"Ошибка создания счёта: {exc}")
         with connect_db() as conn:
             conn.execute("""
-                UPDATE star_orders SET status = 'invoice_error'
+                UPDATE star_orders
+                SET status = 'invoice_error'
                 WHERE payload = %s AND status = 'pending'
             """, (payload,))
         raise HTTPException(502, "Не удалось создать счёт Telegram")
 
     return {
         "invoice_url": invoice_url,
-        "case_id": body.case_id,
-        "price": case["price"],
+        "amount": amount,
     }
 
 
 @app.get("/api/me")
 def me(x_telegram_init_data: str = Header(default="")):
     player = get_player(x_telegram_init_data)
-    telegram_id, first_name, last_name, username, balance, opens, spent, wins = player
+
+    (
+        telegram_id, first_name, last_name, username,
+        balance, star_balance, opens, spent, wins
+    ) = player
 
     with connect_db() as conn:
         items = conn.execute("""
             SELECT icon, name, description, rarity, created_at
             FROM inventory
             WHERE telegram_id = %s
-            ORDER BY id DESC LIMIT 100
+            ORDER BY id DESC
+            LIMIT 100
         """, (telegram_id,)).fetchall()
 
     return {
@@ -451,8 +450,15 @@ def me(x_telegram_init_data: str = Header(default="")):
             "last_name": last_name,
             "username": username,
         },
+        # star_balance — новый баланс для оплаты кейсов.
+        "star_balance": star_balance,
+        # Старый баланс возвращается для совместимости интерфейса.
         "balance": balance,
-        "stats": {"opens": opens, "spent": spent, "wins": wins},
+        "stats": {
+            "opens": opens,
+            "spent": spent,
+            "wins": wins,
+        },
         "inventory": [
             {
                 "icon": row[0],
@@ -485,23 +491,23 @@ def open_case(
 
     with connect_db() as conn:
         current = conn.execute("""
-            SELECT balance FROM players
-            WHERE telegram_id = %s FOR UPDATE
+            SELECT star_balance
+            FROM players
+            WHERE telegram_id = %s
+            FOR UPDATE
         """, (telegram_id,)).fetchone()
 
         if not current or current[0] < body.price:
-            raise HTTPException(400, "Недостаточно монет")
-
-        new_balance = current[0] - body.price
+            raise HTTPException(400, "Недостаточно Stars на балансе")
 
         conn.execute("""
-            UPDATE players SET
-                balance = %s,
+            UPDATE players
+            SET star_balance = star_balance - %s,
                 opens = opens + 1,
                 spent = spent + %s,
                 wins = wins + 1
             WHERE telegram_id = %s
-        """, (new_balance, body.price, telegram_id))
+        """, (body.price, body.price, telegram_id))
 
         conn.execute("""
             INSERT INTO inventory
@@ -515,7 +521,17 @@ def open_case(
             reward["rarity"],
         ))
 
-    return {"balance": new_balance, "reward": reward}
+        new_balance = conn.execute("""
+            SELECT star_balance
+            FROM players
+            WHERE telegram_id = %s
+        """, (telegram_id,)).fetchone()[0]
+
+    return {
+        "star_balance": new_balance,
+        "balance": new_balance,
+        "reward": reward,
+    }
 
 
 @app.get("/api/leaderboard")
@@ -539,3 +555,4 @@ def leaderboard():
             for row in rows
         ]
     }
+    
