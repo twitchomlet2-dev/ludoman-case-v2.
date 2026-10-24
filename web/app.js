@@ -10,7 +10,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // Баланс
   let balance = 1000;
-  localStorage.setItem("ludoman_balance", "1000");
   let opening = false;
   let spinTimer = null;
 
