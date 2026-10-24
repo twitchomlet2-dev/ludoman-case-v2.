@@ -823,4 +823,28 @@ document.addEventListener("DOMContentLoaded", () => {
             {
               duration: 6500,
               easing: "cubic-bezier(.08,.65,.12,1)",
-              fill: "for
+              fill: "forwards"
+                }
+          );
+
+          animation.onfinish = finishSpin;
+          animation.oncancel = () => {
+            if (!finished) finishSpin();
+          };
+        } catch (error) {
+          console.log("Ошибка анимации", error);
+          finishSpin();
+        }
+
+        spinTimer = setTimeout(finishSpin, 7500);
+      });
+    });
+  }
+
+  // Кнопки открытия кейсов
+  document
+    .querySelectorAll(".open-btn[data-price]")
+    .forEach(button => {
+      button.addEventListener("click", () => openCase(button));
+    });
+});
