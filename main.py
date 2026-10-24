@@ -143,10 +143,36 @@ def init_db():
                 balance BIGINT NOT NULL DEFAULT 1000,
                 opens BIGINT NOT NULL DEFAULT 0,
                 spent BIGINT NOT NULL DEFAULT 0,
+
+def init_db():
+    with connect_db() as conn:
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS players (
+                telegram_id BIGINT PRIMARY KEY,
+                first_name TEXT NOT NULL DEFAULT 'Игрок',
+                last_name TEXT NOT NULL DEFAULT '',
+                username TEXT NOT NULL DEFAULT '',
+                balance BIGINT NOT NULL DEFAULT 1000,
+                opens BIGINT NOT NULL DEFAULT 0,
+                spent BIGINT NOT NULL DEFAULT 0,
                 wins BIGINT NOT NULL DEFAULT 0,
                 created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
             )
-                    conn.execute("""
+        """)
+
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS inventory (
+                id BIGSERIAL PRIMARY KEY,
+                telegram_id BIGINT NOT NULL REFERENCES players(telegram_id),
+                icon TEXT NOT NULL,
+                name TEXT NOT NULL,
+                description TEXT NOT NULL,
+                rarity TEXT NOT NULL,
+                created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+            )
+        """)
+
+        conn.execute("""
             CREATE TABLE IF NOT EXISTS star_orders (
                 payload TEXT PRIMARY KEY,
                 telegram_id BIGINT NOT NULL REFERENCES players(telegram_id),
@@ -161,20 +187,7 @@ def init_db():
                 delivered_at TIMESTAMPTZ
             )
         """)
-        """)
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS inventory (
-                id BIGSERIAL PRIMARY KEY,
-                telegram_id BIGINT NOT NULL REFERENCES players(telegram_id),
-                icon TEXT NOT NULL,
-                name TEXT NOT NULL,
-                description TEXT NOT NULL,
-                rarity TEXT NOT NULL,
-                created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-            )
-        """)
-
-
+        
 @app.on_event("startup")
 def startup():
     init_db()
