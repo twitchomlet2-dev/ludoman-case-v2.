@@ -1,402 +1,256 @@
 
-document.addEventListener("DOMContentLoaded", async () => {
+document.addEventListener("DOMContentLoaded", () => {
   const tg = window.Telegram?.WebApp;
 
   if (tg) {
     tg.ready();
     tg.expand();
-    try {
-      tg.setHeaderColor("#101010");
-      tg.setBackgroundColor("#101010");
-    } catch {}
+    tg.setHeaderColor("#090a09");
+    tg.setBackgroundColor("#090a09");
   }
 
-  const $ = (selector, root = document) => root.querySelector(selector);
-  const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
-
-  let player = null;
-  let busy = false;
-
   const CASES = [
-    { price: 50, name: "Старт", emoji: "🎁" },
-    { price: 100, name: "Про", emoji: "💎" },
-    { price: 250, name: "VIP", emoji: "👑" },
-    { price: 500, name: "Легенда", emoji: "🐉" }
+    { price: 5, name: "STARTER", emoji: "🎁", description: "Первый шанс" },
+    { price: 49, name: "BASIC", emoji: "📦", description: "Начни открытие" },
+    { price: 249, name: "CRYSTAL", emoji: "💎", description: "Больше ценности" },
+    { price: 499, name: "MYSTIC", emoji: "🔮", description: "Тайна внутри" },
+    { price: 999, name: "ROYAL", emoji: "👑", description: "Королевский кейс" },
+    { price: 1499, name: "FIRE", emoji: "🔥", description: "Жаркие награды" },
+    { price: 2499, name: "DRAGON", emoji: "🐉", description: "Сила дракона" },
+    { price: 4999, name: "LEGEND", emoji: "⚡", description: "Для настоящих легенд" }
   ];
 
-  const style = document.createElement("style");
-  style.textContent = `
-    :root {
-      --lime: #c6ff00;
-      --bg: #101010;
-      --panel: #1b1b1b;
-      --text: #f5f5f5;
-      --muted: #999;
-      --border: #303030;
-    }
+  const $ = (selector) => document.querySelector(selector);
 
-    * { box-sizing: border-box; }
-
-    html { background: var(--bg); }
-
-    body {
-      margin: 0;
-      padding: 0 0 calc(88px + env(safe-area-inset-bottom));
-      background: var(--bg);
-      color: var(--text);
-      font-family: Arial, sans-serif;
-    }
-
-    #app {
-      max-width: 760px;
-      margin: auto;
-      min-height: 100vh;
-    }
-
-    .top-bar {
-      padding: 18px 14px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 10px;
-      flex-wrap: wrap;
-      border-bottom: 1px solid var(--border);
-    }
-
-    .top-bar h1 {
-      margin: 0;
-      font-size: 21px;
-      font-weight: 900;
-    }
-
-    .top-bar h1 span, #balance { color: var(--lime); }
-
-    .balance-box {
-      padding: 11px 12px;
-      background: #222;
-      border-radius: 12px;
-      font-size: 13px;
-    }
-
-    main { padding: 0 0 15px; }
-
-    h2 { font-size: 21px; }
-    h3 { margin-top: 0; }
-
-    #ludoman-topup, #ludoman-cases, #case-animation,
-    #inventory, #profile {
-      padding: 0 14px;
-    }
-
-    #ludoman-topup { padding-top: 14px; }
-
-    .panel, .case-card {
-      padding: 16px;
-      background: var(--panel);
-      border: 1px solid var(--border);
-      border-radius: 16px;
-      min-width: 0;
-    }
-
-    .panel { margin: 14px 0; overflow-wrap: anywhere; }
-
-    .cases {
-      display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 12px;
-    }
-
-    .case-card { text-align: center; }
-    .case-emoji { font-size: 42px; }
-    .case-card h3 { margin: 10px 0; }
-    .case-card p, .muted {
-      color: var(--muted);
-      font-size: 13px;
-      line-height: 1.5;
-    }
-
-    button {
-      padding: 12px;
-      border: none;
-      border-radius: 11px;
-      background: var(--lime);
-      color: #101010;
-      font-size: 14px;
-      font-weight: bold;
-      cursor: pointer;
-    }
-
-    button:disabled { opacity: .45; cursor: not-allowed; }
-    .open-btn { width: 100%; }
-
-    .topup-row {
-      display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 9px;
-    }
-
-    .topup-row button { width: 100%; }
-
-    .custom-topup {
-      display: flex;
-      gap: 8px;
-      margin-top: 12px;
-    }
-
-    .custom-topup input {
-      width: 100%;
-      min-width: 0;
-      padding: 12px;
-      border-radius: 10px;
-      border: 1px solid #444;
-      background: #111;
-      color: white;
-    }
-
-    .item {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      padding: 13px 0;
-      border-bottom: 1px solid #333;
-    }
-
-    .item:last-child { border-bottom: none; }
-
-    .item-icon {
-      width: 50px;
-      height: 50px;
-      flex: 0 0 50px;
-      display: grid;
-      place-items: center;
-      background: #262626;
-      border: 1px solid #393939;
-      border-radius: 14px;
-      font-size: 27px;
-    }
-
-    .item-info { flex: 1; min-width: 0; }
-    .item-info strong { overflow-wrap: anywhere; }
-
-    .rarity {
-      display: inline-block;
-      margin-top: 5px;
-      padding: 4px 7px;
-      background: #292929;
-      border-radius: 6px;
-      color: var(--lime);
-      font-size: 10px;
-      font-weight: bold;
-    }
-
-    .sell-price { color: var(--lime); font-weight: bold; }
-    .sell-btn { margin-top: 8px; padding: 9px 12px; }
-
-    .notice {
-      padding: 13px;
-      margin: 12px 14px;
-      border-radius: 12px;
-      background: #252525;
-      border: 1px solid #444;
-      line-height: 1.5;
-      overflow-wrap: anywhere;
-    }
-
-    .notice.error { border-color: #ff5757; }
-    .hidden { display: none !important; }
-
-    .roulette {
-      margin: 18px 0;
-      padding: 16px;
-      text-align: center;
-      background: #171717;
-      border: 1px solid #333;
-      border-radius: 16px;
-    }
-
-    .win { color: var(--lime); font-weight: bold; margin: 14px 0; }
-
-    .bottom-menu {
-      position: fixed;
-      z-index: 100;
-      bottom: 0;
-      left: 0;
-      right: 0;
-      display: grid;
-      grid-template-columns: repeat(3, minmax(0, 1fr));
-      gap: 8px;
-      max-width: 760px;
-      margin: auto;
-      padding: 10px 12px;
-      padding-bottom: max(10px, env(safe-area-inset-bottom));
-      background: #101010;
-      border-top: 1px solid #303030;
-    }
-
-    .bottom-menu button {
-      padding: 12px 4px;
-      background: #252525;
-      color: #eee;
-      border: 1px solid #393939;
-      font-size: 12px;
-    }
-
-    .bottom-menu button.active {
-      background: var(--lime);
-      color: #101010;
-      border-color: var(--lime);
-    }
-
-    .empty-state { padding: 25px 10px; text-align: center; color: var(--muted); }
-    .big-emoji { font-size: 46px; margin-bottom: 10px; }
-
-    @media (max-width: 360px) {
-      .top-bar h1 { font-size: 18px; }
-      .cases { grid-template-columns: 1fr; }
-    }
-  `;
-  document.head.appendChild(style);
+  let currentTab = "cases";
+  let currentBalance = 0;
+  let selectedTopup = 100;
+  let busy = false;
 
   function escapeHTML(value) {
-    return String(value ?? "").replace(/[&<>"']/g, c => ({
+    return String(value ?? "").replace(/[&<>"']/g, (char) => ({
       "&": "&amp;",
       "<": "&lt;",
       ">": "&gt;",
       '"': "&quot;",
-      "'": "&#039;"
-    })[c]);
+      "'": "&#39;"
+    })[char]);
   }
 
-  function number(value) {
-    return Number(value || 0).toLocaleString("ru-RU");
+  function formatNumber(value) {
+    const n = Number(value);
+    return Number.isFinite(n) ? n.toLocaleString("ru-RU") : "0";
   }
 
-  function notify(message, error = false) {
-    const el = $("#app-notice");
-    if (!el) return;
-    el.textContent = message;
-    el.classList.toggle("error", error);
-    el.classList.remove("hidden");
-  }
+  function notify(message, type = "info") {
+    const notice = $("#app-notice");
+    if (!notice) return;
 
-  function clearNotice() {
-    const el = $("#app-notice");
-    if (el) el.classList.add("hidden");
+    notice.textContent = message;
+    notice.classList.remove("hidden", "error-text");
+
+    if (type === "error") {
+      notice.classList.add("error-text");
+    }
+
+    if (type === "success" && tg?.HapticFeedback) {
+      tg.HapticFeedback.notificationOccurred("success");
+    }
+
+    window.clearTimeout(notify.timer);
+    notify.timer = window.setTimeout(() => {
+      notice.classList.add("hidden");
+    }, 4500);
   }
 
   async function api(path, options = {}) {
-    if (!tg?.initData) {
-      throw new Error("Открой приложение через Telegram.");
-    }
+    const headers = {
+      "Content-Type": "application/json",
+      ...(tg?.initData
+        ? { "X-Telegram-Init-Data": tg.initData }
+        : {}),
+      ...(options.headers || {})
+    };
 
     const response = await fetch(path, {
       ...options,
-      headers: {
-        "Content-Type": "application/json",
-        "X-Telegram-Init-Data": tg.initData,
-        ...(options.headers || {})
-      }
+      headers
     });
 
-    let data;
+    let data = {};
     try {
       data = await response.json();
     } catch {
-      throw new Error("Сервер вернул неверный ответ.");
+      data = {};
     }
 
     if (!response.ok) {
-      throw new Error(data.detail || data.message || "Ошибка сервера.");
+      throw new Error(data.detail || data.message || "Ошибка сервера");
     }
 
     return data;
   }
 
-  function getEmoji(item) {
-    return item?.icon || item?.emoji || "🎁";
+  function requireTelegram() {
+    if (!tg?.initData) {
+      notify(
+        "Открой приложение через Telegram, чтобы пользоваться балансом, кейсами и оплатой.",
+        "error"
+      );
+      return false;
+    }
+    return true;
   }
 
-  function getName(item) {
-    return item?.name || item?.title || "Награда";
+  function renderCases() {
+    const target = $("#ludoman-cases");
+    if (!target) return;
+
+    target.innerHTML = `
+      <h2 class="page-heading">Открывай <span class="highlight">кейсы</span></h2>
+      <p class="page-subtitle">
+        Выбирай кейс и испытай удачу. Награды попадут в твой инвентарь.
+      </p>
+
+      <div class="cases-grid">
+        ${CASES.map((item) => `
+          <article class="case-card">
+            <div class="case-art">
+              <span class="case-emoji">${item.emoji}</span>
+            </div>
+            <h3 class="case-name">${item.name}</h3>
+            <div class="case-description">${item.description}</div>
+            <div class="case-price">${formatNumber(item.price)} ⭐</div>
+            <button
+              type="button"
+              class="case-open-button"
+              data-open-case="${item.price}"
+            >
+              Открыть
+            </button>
+          </article>
+        `).join("")}
+      </div>
+    `;
   }
 
-  // Навигация скрывает целые вкладки, но не удаляет их содержимое.
-  function showTab(name) {
-    $$(".tab-content").forEach(section => section.classList.add("hidden"));
-
-    const target = $(`#${name}-tab`);
-    if (target) target.classList.remove("hidden");
-
-    $$(".bottom-menu [data-tab]").forEach(button => {
-      button.classList.toggle("active", button.dataset.tab === name);
-    });
-
-    window.scrollTo({ top: 0, behavior: "smooth" });
-  }
-
-  $$(".bottom-menu [data-tab]").forEach(button => {
-    button.addEventListener("click", () => showTab(button.dataset.tab));
-  });
-
-  // Пополнение
   function renderTopup() {
-    const container = $("#ludoman-topup");
-    if (!container) return;
+    const target = $("#ludoman-topup");
+    if (!target) return;
 
-    container.innerHTML = `
+    const amounts = [50, 100, 250, 500];
+
+    target.innerHTML = `
+      <h2 class="page-heading">Пополнение <span class="highlight">баланса</span></h2>
+      <p class="page-subtitle">
+        Пополняй внутренний баланс через безопасную оплату Telegram Stars.
+      </p>
+
       <div class="panel">
-        <h3>⭐ Пополнение баланса</h3>
-        <p class="muted">
-          Выбери сумму. Оплата выполняется через Telegram Stars.
-          Диапазон: от 50 до 10 000 Stars.
+        <h3 class="panel-title">Выбери сумму</h3>
+        <p class="panel-description">
+          Оплата проходит через Telegram. После подтверждения платежа сервер
+          начислит средства на твой баланс.
         </p>
-        <div class="topup-row">
-          <button type="button" data-topup="50">50 ⭐</button>
-          <button type="button" data-topup="100">100 ⭐</button>
-          <button type="button" data-topup="250">250 ⭐</button>
-          <button type="button" data-topup="500">500 ⭐</button>
+
+        <div class="topup-options">
+          ${amounts.map((amount) => `
+            <button
+              type="button"
+              class="topup-option ${amount === selectedTopup ? "selected" : ""}"
+              data-topup-amount="${amount}"
+            >
+              <strong>${formatNumber(amount)} ⭐</strong>
+              <span>Пополнить</span>
+            </button>
+          `).join("")}
         </div>
-        <div class="custom-topup">
-          <input id="custom-topup-amount" type="number" min="50"
-            max="10000" step="1" placeholder="Другая сумма">
-          <button type="button" id="custom-topup-btn">Пополнить</button>
-        </div>
-        <p class="muted">
-          Баланс: <strong id="topup-balance">0</strong> ⭐
+
+        <label class="form-label" for="custom-topup">
+          Или введи другую сумму Stars
+        </label>
+        <input
+          class="text-input"
+          id="custom-topup"
+          type="number"
+          inputmode="numeric"
+          min="50"
+          max="10000"
+          step="1"
+          placeholder="От 50 до 10000"
+        >
+
+        <button type="button" class="primary-button topup-submit" id="topup-submit">
+          Пополнить на ${formatNumber(selectedTopup)} ⭐
+        </button>
+
+        <p class="page-subtitle" style="margin:12px 0 0">
+          Минимальная сумма пополнения — 50 Stars. Цены кейсов могут быть ниже.
         </p>
       </div>
     `;
 
-    $$("[data-topup]", container).forEach(button => {
+    target.querySelectorAll("[data-topup-amount]").forEach((button) => {
       button.addEventListener("click", () => {
-        createTopup(Number(button.dataset.topup), button);
+        selectedTopup = Number(button.dataset.topupAmount);
+        const customInput = $("#custom-topup");
+        if (customInput) customInput.value = "";
+
+        target.querySelectorAll("[data-topup-amount]").forEach((option) => {
+          option.classList.toggle(
+            "selected",
+            Number(option.dataset.topupAmount) === selectedTopup
+          );
+        });
+
+        updateTopupButton();
       });
     });
 
-    $("#custom-topup-btn", container).addEventListener("click", () => {
-      createTopup(Number($("#custom-topup-amount", container).value),
-        $("#custom-topup-btn", container));
+    $("#custom-topup")?.addEventListener("input", (event) => {
+      const value = Number(event.target.value);
+      if (Number.isInteger(value) && value > 0) {
+        selectedTopup = value;
+        target.querySelectorAll("[data-topup-amount]").forEach((option) => {
+          option.classList.remove("selected");
+        });
+        updateTopupButton();
+      }
     });
+
+    $("#topup-submit")?.addEventListener("click", createTopup);
   }
 
-  async function createTopup(amount, button) {
+  function updateTopupButton() {
+    const button = $("#topup-submit");
+    if (button) {
+      button.textContent = `Пополнить на ${formatNumber(selectedTopup)} ⭐`;
+    }
+  }
+
+  async function createTopup() {
     if (busy) return;
+    if (!requireTelegram()) return;
+
+    const customInput = $("#custom-topup");
+    const customValue = customInput?.value.trim();
+    const amount = customValue ? Number(customValue) : selectedTopup;
 
     if (!Number.isInteger(amount) || amount < 50 || amount > 10000) {
-      notify("Введи целую сумму от 50 до 10 000 Stars.", true);
+      notify("Введи целую сумму от 50 до 10000 Stars.", "error");
       return;
     }
 
-    if (!tg?.initData || typeof tg.openInvoice !== "function") {
-      notify("Открой приложение через Telegram для оплаты.", true);
+    if (!tg?.openInvoice) {
+      notify("Не удалось открыть оплату. Запусти приложение внутри Telegram.", "error");
       return;
     }
 
     busy = true;
-    const original = button?.textContent || "Пополнить";
+    const button = $("#topup-submit");
     if (button) {
       button.disabled = true;
-      button.textContent = "Создаём счёт...";
+      button.textContent = "Создаём платёж...";
     }
 
     try {
@@ -405,89 +259,105 @@ document.addEventListener("DOMContentLoaded", async () => {
         body: JSON.stringify({ amount })
       });
 
-      if (!result.invoice_url) throw new Error("Нет ссылки на оплату.");
+      if (!result.invoice_url) {
+        throw new Error("Сервер не вернул ссылку на оплату.");
+      }
 
-      tg.openInvoice(result.invoice_url, async status => {
-        busy = false;
-        if (button) {
-          button.disabled = false;
-          button.textContent = original;
-        }
-
+      tg.openInvoice(result.invoice_url, async (status) => {
         if (status === "paid") {
-          notify("Оплата завершена. Проверяем зачисление...");
-          try {
-            await refreshData();
-            notify("Проверка завершена. Если баланс не изменился, подожди несколько секунд и обнови профиль.");
-          } catch {
-            notify("Оплата прошла. Перезапусти приложение, чтобы обновить баланс.");
-          }
+          notify(
+            "Платёж подтверждён. Обновляем баланс...",
+            "success"
+          );
+          await refreshData();
         } else if (status === "cancelled") {
           notify("Оплата отменена.");
         } else if (status === "failed") {
-          notify("Оплата не прошла.", true);
+          notify("Платёж не прошёл. Попробуй ещё раз.", "error");
         }
       });
     } catch (error) {
+      notify(error.message || "Не удалось создать платёж.", "error");
+    } finally {
       busy = false;
       if (button) {
         button.disabled = false;
-        button.textContent = original;
+        updateTopupButton();
       }
-      notify(error.message, true);
     }
   }
 
-  // Кейсы
-  function renderCases() {
-    const section = $("#ludoman-cases");
-    if (!section) return;
+  function showReward(reward, price) {
+    const target = $("#case-animation");
+    if (!target) return;
 
-    section.innerHTML = `
-      <h2>🎰 Кейсы LUDOMAN</h2>
-      <p class="muted">Выбирай кейс и получай коллекционные предметы.</p>
-      <div class="cases">
-        ${CASES.map(item => `
-          <div class="case-card">
-            <div class="case-emoji">${item.emoji}</div>
-            <h3>${escapeHTML(item.name)}</h3>
-            <p>Цена: ${item.price} ⭐</p>
-            <button type="button" class="open-btn" data-price="${item.price}">
-              Открыть кейс
-            </button>
+    if (!reward || typeof reward !== "object") {
+      target.innerHTML = `
+        <div class="reward-card">
+          <h3 class="reward-title">Кейс открыт!</h3>
+          <p class="page-subtitle">
+            Проверь инвентарь — там должна появиться твоя награда.
+          </p>
+        </div>
+      `;
+      return;
+    }
+
+    const name = reward.name || reward.title || reward.item_name || "Новая награда";
+    const emoji = reward.emoji || reward.icon || "🎁";
+    const value = reward.sell_price ?? reward.value ?? reward.price;
+
+    target.innerHTML = `
+      <div class="reward-card">
+        <div class="muted">Кейс за ${formatNumber(price)} ⭐</div>
+        <div class="reward-icon">${escapeHTML(emoji)}</div>
+        <h3 class="reward-title">${escapeHTML(name)}</h3>
+        ${value !== undefined ? `
+          <div class="reward-value">
+            Цена продажи: ${formatNumber(value)}
           </div>
-        `).join("")}
+        ` : ""}
+        <p class="page-subtitle" style="margin:12px 0 0">
+          Награда получена. Она должна появиться в инвентаре.
+        </p>
+        <button type="button" class="secondary-button" id="reward-to-inventory">
+          Перейти в инвентарь
+        </button>
       </div>
     `;
 
-    $$(".open-btn", section).forEach(button => {
-      button.addEventListener("click", () => openCase(button));
+    $("#reward-to-inventory")?.addEventListener("click", () => {
+      showTab("inventory");
     });
   }
 
-  async function openCase(button) {
+  async function openCase(price) {
     if (busy) return;
-    if (!player) {
-      notify("Профиль ещё загружается.", true);
+    if (!requireTelegram()) return;
+
+    const item = CASES.find((entry) => entry.price === price);
+    if (!item) {
+      notify("Неизвестный кейс.", "error");
       return;
     }
 
-    const price = Number(button.dataset.price);
-
-    if (!CASES.some(item => item.price === price)) {
-      notify("Неизвестный кейс.", true);
-      return;
-    }
-
-    if (player.star_balance < price) {
-      notify("Недостаточно средств. Пополни баланс.", true);
-      showTab("cases");
+    if (currentBalance < price) {
+      notify("Недостаточно средств. Перейди во вкладку «Пополнение».", "error");
       return;
     }
 
     busy = true;
-    clearNotice();
-    $$(".open-btn").forEach(btn => btn.disabled = true);
+    const buttons = document.querySelectorAll("[data-open-case]");
+    buttons.forEach((button) => {
+      button.disabled = true;
+      if (Number(button.dataset.openCase) === price) {
+        button.textContent = "Открываем...";
+      }
+    });
+
+    if (tg?.HapticFeedback) {
+      tg.HapticFeedback.impactOccurred("medium");
+    }
 
     try {
       const result = await api("/api/open", {
@@ -495,321 +365,191 @@ document.addEventListener("DOMContentLoaded", async () => {
         body: JSON.stringify({ price })
       });
 
-      if (!result.reward) throw new Error("Сервер не вернул награду.");
+      const reward = result.reward || result.item || result.drop || null;
 
-      player.star_balance = Number(result.star_balance ?? result.balance ?? 0);
-      renderBalance();
-      await showReward(result.reward);
+      if (typeof result.star_balance === "number") {
+        currentBalance = result.star_balance;
+        updateBalance(currentBalance);
+      } else if (typeof result.balance === "number") {
+        currentBalance = result.balance;
+        updateBalance(currentBalance);
+      }
+
+      showReward(reward, price);
       await refreshData();
+      notify("Кейс открыт!", "success");
     } catch (error) {
-      notify(error.message || "Не удалось открыть кейс.", true);
-      try { await refreshData(); } catch {}
+      notify(error.message || "Не удалось открыть кейс.", "error");
     } finally {
       busy = false;
-      $$(".open-btn").forEach(btn => btn.disabled = false);
+      renderCases();
     }
   }
 
-  function showReward(reward) {
-    const target = $("#case-animation");
-    if (!target) return Promise.resolve();
-
-    target.innerHTML = `
-      <div class="roulette">
-        <h3>🎰 Открываем кейс...</h3>
-        <div style="font-size:55px;margin:20px">🎁</div>
-        <p class="muted">Подготавливаем награду</p>
-      </div>
-    `;
-
-    return new Promise(resolve => {
-      window.setTimeout(() => {
-        target.innerHTML = `
-          <div class="roulette">
-            <h3>🎉 Твоя награда!</h3>
-            <div style="font-size:60px;margin:20px">
-              ${escapeHTML(getEmoji(reward))}
-            </div>
-            <div class="win">${escapeHTML(getName(reward))}</div>
-            <p class="muted">Предмет сохранён в инвентаре.</p>
-            <button type="button" id="result-close" style="width:100%">
-              Отлично!
-            </button>
-            <button type="button" id="result-inventory"
-              style="width:100%;margin-top:8px;background:#292929;color:white">
-              🎒 Перейти в инвентарь
-            </button>
-          </div>
-        `;
-
-        $("#result-close", target).addEventListener("click", () => {
-          target.innerHTML = "";
-        });
-
-        $("#result-inventory", target).addEventListener("click", () => {
-          target.innerHTML = "";
-          showTab("inventory");
-        });
-
-        try { tg?.HapticFeedback?.notificationOccurred("success"); } catch {}
-        resolve();
-      }, 1000);
-    });
+  function updateBalance(value) {
+    currentBalance = Number(value) || 0;
+    const target = $("#balance");
+    if (target) {
+      target.textContent = `${formatNumber(currentBalance)} ⭐`;
+    }
   }
 
-  // Инвентарь
-  function renderInventory(items = []) {
+  function renderInventory(items) {
     const target = $("#inventory");
     if (!target) return;
 
+    const inventory = Array.isArray(items) ? items : [];
+
+    if (inventory.length === 0) {
+      target.innerHTML = `
+        <h2 class="page-heading">Мой <span class="highlight">инвентарь</span></h2>
+        <p class="page-subtitle">Все полученные предметы будут храниться здесь.</p>
+        <div class="empty-state">
+          <span class="empty-icon">🎒</span>
+          Инвентарь пока пуст.
+          <br>
+          Открой кейс, чтобы получить первую награду.
+          <br><br>
+          <button type="button" class="primary-button" id="inventory-to-cases">
+            Смотреть кейсы
+          </button>
+        </div>
+      `;
+
+      $("#inventory-to-cases")?.addEventListener("click", () => showTab("cases"));
+      return;
+    }
+
     target.innerHTML = `
-      <div class="panel">
-        <h3>🎒 Мой инвентарь</h3>
-        <p class="muted">Продай предмет, чтобы получить средства на внутренний баланс.</p>
+      <h2 class="page-heading">Мой <span class="highlight">инвентарь</span></h2>
+      <p class="page-subtitle">Твои предметы и доступная стоимость продажи.</p>
 
-        ${
-          items.length
-            ? items.map(item => {
-                const price = Number(item.sell_price || 0);
+      <div class="inventory-summary">
+        <span>Предметов в инвентаре</span>
+        <strong>${formatNumber(inventory.length)}</strong>
+      </div>
 
-                return `
-                  <div class="item">
-                    <div class="item-icon">${escapeHTML(getEmoji(item))}</div>
-                    <div class="item-info">
-                      <strong>${escapeHTML(getName(item))}</strong>
-                      <div class="muted">
-                        ${escapeHTML(item.desc || item.description || "")}
-                      </div>
-                      <span class="rarity">${escapeHTML(item.rarity || "НАГРАДА")}</span>
-                      <div style="margin-top:8px">
-                        ${
-                          price > 0
-                            ? `
-                              <span class="sell-price">${number(price)} ⭐</span><br>
-                              <button type="button" class="sell-btn"
-                                data-sell-id="${Number(item.id)}">
-                                💰 Продать
-                              </button>
-                            `
-                            : `<span class="muted">Продажа недоступна</span>`
-                        }
-                      </div>
-                    </div>
-                  </div>
-                `;
-              }).join("")
-            : `
-              <div class="empty-state">
-                <div class="big-emoji">🎁</div>
-                <strong>Инвентарь пока пуст</strong>
-                <p>Открой кейс, чтобы получить первый предмет.</p>
-                <button type="button" id="inventory-open-cases">
-                  Открыть кейсы
-                </button>
+      <div class="inventory-list">
+        ${inventory.map((item) => {
+          const id = item.id ?? item.item_id;
+          const name = item.name || item.title || item.item_name || "Предмет";
+          const emoji = item.emoji || item.icon || "🎁";
+          const sellPrice = Number(item.sell_price ?? item.value ?? 0);
+          const canSell = id !== undefined && id !== null && sellPrice > 0;
+
+          return `
+            <article class="inventory-item">
+              <div class="item-icon">${escapeHTML(emoji)}</div>
+              <div class="item-info">
+                <h3 class="item-name">${escapeHTML(name)}</h3>
+                <div class="item-price">
+                  ${canSell
+                    ? `Продажа: ${formatNumber(sellPrice)}`
+                    : "Предмет получен"}
+                </div>
               </div>
-            `
-        }
+              ${canSell ? `
+                <button
+                  type="button"
+                  class="sell-button"
+                  data-sell-item="${escapeHTML(id)}"
+                >
+                  Продать
+                </button>
+              ` : ""}
+            </article>
+          `;
+        }).join("")}
       </div>
     `;
 
-    $("#inventory-open-cases")?.addEventListener("click", () => showTab("cases"));
-
-    $$(".sell-btn", target).forEach(button => {
-      button.addEventListener("click", () => sellItem(button));
+    target.querySelectorAll("[data-sell-item]").forEach((button) => {
+      button.addEventListener("click", () => sellItem(button.dataset.sellItem, button));
     });
   }
 
-  async function sellItem(button) {
+  async function sellItem(itemId, button) {
     if (busy) return;
-
-    const itemId = Number(button.dataset.sellId);
-    const item = player?.inventory?.find(entry => Number(entry.id) === itemId);
-
-    if (!item || !Number.isInteger(itemId) || itemId <= 0) {
-      notify("Предмет не найден. Обнови инвентарь.", true);
-      return;
-    }
-
-    const price = Number(item.sell_price || 0);
-    if (price <= 0) {
-      notify("Этот предмет нельзя продать.", true);
-      return;
-    }
-
-    let confirmed;
-
-    if (typeof tg?.showConfirm === "function") {
-      confirmed = await new Promise(resolve => {
-        tg.showConfirm(`Продать «${getName(item)}» за ${price} ⭐?`, resolve);
-      });
-    } else {
-      confirmed = window.confirm(`Продать «${getName(item)}» за ${price} ⭐?`);
-    }
-
-    if (!confirmed) return;
+    if (!requireTelegram()) return;
 
     busy = true;
     button.disabled = true;
-    button.textContent = "Продаём...";
+    button.textContent = "...";
 
     try {
-      const result = await api("/api/inventory/sell", {
+      await api("/api/inventory/sell", {
         method: "POST",
         body: JSON.stringify({ item_id: itemId })
       });
 
-      player.star_balance = Number(result.star_balance ?? player.star_balance);
+      notify("Предмет продан!", "success");
       await refreshData();
-      notify(`✅ Продано! Начислено ${number(result.sold_for)} ⭐.`);
-
-      try { tg?.HapticFeedback?.notificationOccurred("success"); } catch {}
     } catch (error) {
-      notify(error.message || "Не удалось продать предмет.", true);
-      try { await refreshData(); } catch {}
+      notify(error.message || "Не удалось продать предмет.", "error");
+      button.disabled = false;
+      button.textContent = "Продать";
     } finally {
       busy = false;
     }
   }
 
-  // Профиль и рейтинг
-  function renderProfile() {
-    const target = $("#profile");
-    if (!target || !player) return;
+  function showTab(name) {
+    const validTabs = ["cases", "inventory", "topup"];
+    if (!validTabs.includes(name)) return;
 
-    const user = player.user || {};
-    const stats = player.stats || {};
-    const name = [user.first_name, user.last_name].filter(Boolean).join(" ")
-      || user.username || "Игрок";
+    currentTab = name;
 
-    target.innerHTML = `
-      <div class="panel">
-        <h3>👤 Профиль игрока</h3>
+    document.querySelectorAll(".tab-content").forEach((section) => {
+      section.classList.add("hidden");
+    });
 
-        <div class="item">
-          <div class="item-info">
-            <span class="muted">Имя</span><br>
-            <strong>${escapeHTML(name)}</strong>
-          </div>
-        </div>
+    const activeSection = $(`#${name}-tab`);
+    if (activeSection) activeSection.classList.remove("hidden");
 
-        <div class="item">
-          <div class="item-info">
-            <span class="muted">Telegram ID</span><br>
-            <strong>${escapeHTML(user.id || "—")}</strong>
-          </div>
-        </div>
+    document.querySelectorAll(".bottom-menu [data-tab]").forEach((button) => {
+      button.classList.toggle("active", button.dataset.tab === name);
+    });
 
-        <div class="item">
-          <div class="item-info">
-            <span class="muted">Баланс</span><br>
-            <strong>${number(player.star_balance)} ⭐</strong>
-          </div>
-        </div>
-
-        <div class="item">
-          <div class="item-info">
-            <span class="muted">Открыто кейсов</span><br>
-            <strong>${number(stats.opens)}</strong>
-          </div>
-        </div>
-
-        <div class="item">
-          <div class="item-info">
-            <span class="muted">Потрачено Stars</span><br>
-            <strong>${number(stats.spent)} ⭐</strong>
-          </div>
-        </div>
-
-        <div class="item">
-          <div class="item-info">
-            <span class="muted">Побед</span><br>
-            <strong>${number(stats.wins)}</strong>
-          </div>
-        </div>
-
-        <button type="button" id="leaderboard-btn" style="width:100%;margin-top:12px">
-          🏆 Рейтинг игроков
-        </button>
-        <div id="leaderboard"></div>
-      </div>
-    `;
-
-    $("#leaderboard-btn", target).addEventListener("click", loadLeaderboard);
-  }
-
-  async function loadLeaderboard() {
-    const target = $("#leaderboard");
-    if (!target) return;
-
-    target.textContent = "Загружаем рейтинг...";
-
-    try {
-      const data = await api("/api/leaderboard");
-      
-      const players = Array.isArray(data)
-        ? data
-        : (data.players || []);
-
-      target.innerHTML = `
-        <div class="panel" style="margin-top:12px">
-          <h3>🏆 Рейтинг игроков</h3>
-          ${
-            players.length
-              ? players.map((item, index) => `
-                  <div class="item">
-                    <div class="item-info">
-                      <strong>${index + 1}. ${
-                        escapeHTML(item.first_name || item.username || item.name || "Игрок")
-                      }</strong>
-                    </div>
-                    <strong>${number(item.opens || 0)} кейсов</strong>
-                  </div>
-                `).join("")
-              : '<p class="muted">Пока игроков нет.</p>'
-          }
-        </div>
-      `;
-    } catch (error) {
-      target.textContent = error.message || "Не удалось загрузить рейтинг.";
+    if (tg?.HapticFeedback) {
+      tg.HapticFeedback.selectionChanged();
     }
-  }
 
-  function renderBalance() {
-    const balance = Number(player?.star_balance || 0);
-    const headerBalance = $("#balance");
-    const topupBalance = $("#topup-balance");
-
-    if (headerBalance) headerBalance.textContent = number(balance);
-    if (topupBalance) topupBalance.textContent = number(balance);
+    window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
   async function refreshData() {
-    const data = await api("/api/me");
-    player = data;
-
-    if (data.user && data.star_balance === undefined) {
-      player.star_balance = Number(data.balance || 0);
+    if (!tg?.initData) {
+      updateBalance(0);
+      renderInventory([]);
+      return;
     }
 
-    renderBalance();
-    renderProfile();
-    renderInventory(Array.isArray(data.inventory) ? data.inventory : []);
-  }
-
-  renderTopup();
-  renderCases();
-  showTab("cases");
-
-  if (!tg?.initData) {
-    notify("Открой LUDOMAN CASE через Telegram, чтобы загрузить профиль и играть.");
-    renderInventory([]);
-  } else {
     try {
-      await refreshData();
+      const data = await api("/api/me");
+      const balance = data.star_balance ?? data.balance ?? 0;
+
+      updateBalance(balance);
+      renderInventory(data.inventory || []);
     } catch (error) {
-      notify(error.message || "Не удалось загрузить профиль.", true);
+      notify(error.message || "Не удалось загрузить данные аккаунта.", "error");
     }
   }
-});
 
-      
+  document.querySelectorAll(".bottom-menu [data-tab]").forEach((button) => {
+    button.addEventListener("click", () => showTab(button.dataset.tab));
+  });
+
+  $("#ludoman-cases")?.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-open-case]");
+    if (!button) return;
+
+    openCase(Number(button.dataset.openCase));
+  });
+
+  renderCases();
+  renderTopup();
+  renderInventory([]);
+  showTab("cases");
+  refreshData();
+});
+            
