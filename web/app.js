@@ -626,7 +626,76 @@ document.addEventListener("DOMContentLoaded", async () => {
   document.querySelector("#profile-btn")?.addEventListener("click", () => {
     profileEl?.scrollIntoView({ behavior: "smooth", block: "start" });
   });
+  // Покупка кейсов за Telegram Stars
+  document.querySelectorAll(".star-case-btn").forEach(button => {
+    button.addEventListener("click", async () => {
+      if (busy) return;
 
+      if (!tg?.initData) {
+        notify("Открой приложение через Telegram.", true);
+        return;
+      }
+
+      const caseId = button.dataset.caseId;
+      const prices = {
+        start: 50,
+        pro: 100,
+        vip: 250
+      };
+
+      if (!prices[caseId]) {
+        notify("Неизвестный кейс.", true);
+        return;
+      }
+
+      if (typeof tg.openInvoice !== "function") {
+        notify(
+          "Оплата доступна только в поддерживаемом приложении Telegram.",
+          true
+        );
+        return;
+      }
+
+      busy = true;
+      button.disabled = true;
+      const originalText = button.textContent;
+      button.textContent = "Создаём счёт...";
+
+      try {
+        const result = await api("/api/star/create", {
+          method: "POST",
+          body: JSON.stringify({ case_id: caseId })
+        });
+
+        if (!result.invoice_url) {
+          throw new Error("Сервер не вернул ссылку на оплату.");
+        }
+
+        button.textContent = "Ожидаем оплату...";
+
+        tg.openInvoice(result.invoice_url, async status => {
+          busy = false;
+          button.disabled = false;
+          button.textContent = originalText;
+
+          if (status === "paid") {
+            notify(
+              "Оплата принята! Проверяем выдачу подарка. 🎁"
+            );
+          } else if (status === "cancelled") {
+            notify("Оплата отменена.");
+          } else if (status === "failed") {
+            notify("Оплата не прошла. Попробуй ещё раз.", true);
+          }
+        });
+      } catch (error) {
+        busy = false;
+        button.disabled = false;
+        button.textContent = originalText;
+        notify(error.message || "Не удалось создать счёт.", true);
+      }
+    });
+  });
   if (!tg?.initData) {
     notify("Открой LUDOMAN CASE через Telegram, чтобы загрузить свой профиль.", true);
     document.querySelectorAll(".open-btn").forEach(btn => {
