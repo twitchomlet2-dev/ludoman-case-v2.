@@ -165,6 +165,28 @@ def init_db():
                 created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
             )
         """)
+        
+        conn.execute("""
+            ALTER TABLE inventory
+            ADD COLUMN IF NOT EXISTS reward_type TEXT NOT NULL DEFAULT 'item'
+        """)
+        conn.execute("""
+            ALTER TABLE inventory
+            ADD COLUMN IF NOT EXISTS gift_id TEXT
+        """)
+        conn.execute("""
+            ALTER TABLE inventory
+            ADD COLUMN IF NOT EXISTS delivery_status TEXT
+        """)
+        conn.execute("""a
+            ALTER TABLE inventory
+            ADD COLUMN IF NOT EXISTS delivery_error TEXT
+        """)
+        conn.execute("""
+            ALTER TABLE inventory
+            ADD COLUMN IF NOT EXISTS delivered_at TIMESTAMPTZ
+        """)
+        
 
         conn.execute("""
             ALTER TABLE inventory
