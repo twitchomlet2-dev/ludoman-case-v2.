@@ -3,52 +3,52 @@
 <html lang="ru">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#101010">
-  <title>LUDOMAN Case</title>
-
+  <title>LUDOMAN CASE</title>
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
-  <link rel="stylesheet" href="/static/style.css">
+  <link rel="stylesheet" href="/static/style.css?v=3">
 </head>
 <body>
-  <header class="top-bar">
-    <h1>LUDOMAN <span>CASE</span></h1>
+  <div id="app">
+    <header class="top-bar">
+      <h1>🔥 LUDOMAN <span>CASE</span></h1>
+      <div class="balance-box">
+        Баланс: <strong id="balance">0</strong> ⭐
+      </div>
+    </header>
 
-    <div class="balance-box">
-      Баланс: <span id="balance">0</span> ⭐
-    </div>
-  </header>
+    <div id="app-notice" class="notice hidden"></div>
 
-  <main id="app">
+    <main>
+      <section id="cases-tab" class="tab-content">
+        <section id="ludoman-topup"></section>
+        <section id="ludoman-cases"></section>
+        <section id="case-animation"></section>
+      </section>
 
-    <!-- Пополнение внутреннего баланса -->
-    <section id="ludoman-topup"></section>
+      <section id="inventory-tab" class="tab-content hidden">
+        <section id="inventory"></section>
+      </section>
 
-    <!-- Единственный список кейсов -->
-    <section class="cases-section">
-      <h2>🎮 Кейсы LUDOMAN</h2>
-      <p class="muted">
-        Кейсы открываются за внутренний баланс.
-        Пополни баланс через Telegram Stars.
-      </p>
+      <section id="profile-tab" class="tab-content hidden">
+        <section id="profile"></section>
+      </section>
+    </main>
 
-      <div id="ludoman-cases" class="cases"></div>
-    </section>
-
-    <!-- Результат открытия кейса -->
-    <section id="case-animation"></section>
-
-    <!-- Нижнее меню -->
     <nav class="bottom-menu">
-      <button id="inventory-btn" type="button">🎒 Инвентарь</button>
-      <button id="profile-btn" type="button">👤 Профиль</button>
+      <button type="button" class="active" data-tab="cases">
+        🎁 Кейсы
+      </button>
+      <button type="button" data-tab="inventory">
+        🎒 Инвентарь
+      </button>
+      <button type="button" data-tab="profile">
+        👤 Профиль
+      </button>
     </nav>
+  </div>
 
-    <section id="inventory"></section>
-    <section id="profile"></section>
-
-  </main>
-
-  <script src="/static/app.js"></script>
+  <script src="/static/app.js?v=3"></script>
 </body>
 </html>
