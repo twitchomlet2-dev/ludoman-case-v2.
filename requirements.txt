@@ -1,4 +1,4 @@
 
 fastapi
-uvicorn
-aiogram
+uvicorn[standard]
+psycopg[binary]
