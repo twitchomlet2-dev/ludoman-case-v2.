@@ -233,6 +233,7 @@ def home():
 def health():
     return {"status": "ok", "app": "LUDOMAN Case"}
     
+
 @app.post("/telegram/webhook")
 async def telegram_webhook(request: Request):
     if not TELEGRAM_WEBHOOK_SECRET:
@@ -241,14 +242,48 @@ async def telegram_webhook(request: Request):
     received_secret = request.headers.get(
         "X-Telegram-Bot-Api-Secret-Token", ""
     )
-
-    if not hmac.compare_digest(
-        received_secret, TELEGRAM_WEBHOOK_SECRET
-    ):
+    if not hmac.compare_digest(received_secret, TELEGRAM_WEBHOOK_SECRET):
         raise HTTPException(403, "Invalid webhook secret")
 
     update = await request.json()
 
+    # 1. Проверяем заказ перед оплатой.
+    query = update.get("pre_checkout_query")
+    if query:
+        payload = query.get("invoice_payload", "")
+        valid = False
+
+        try:
+            with connect_db() as conn:
+                order = conn.execute("""
+                    SELECT telegram_id, price, status
+                    FROM star_orders
+                    WHERE payload = %s
+                """, (payload,)).fetchone()
+
+            valid = bool(
+                order
+                and order[0] == query["from"]["id"]
+                and order[1] == query.get("total_amount")
+                and query.get("currency") == "XTR"
+                and order[2] == "pending"
+            )
+        except Exception as exc:
+            print(f"Ошибка проверки заказа: {exc}")
+
+        answer = {
+            "pre_checkout_query_id": query["id"],
+            "ok": valid,
+        }
+        if not valid:
+            answer["error_message"] = (
+                "Заказ не найден или уже недействителен. Создай новый."
+            )
+
+        telegram_api("answerPreCheckoutQuery", answer)
+        return {"ok": True}
+
+    # 2. Обрабатываем команду /start и подтверждённую оплату.
     message = update.get("message", {})
     chat = message.get("chat", {})
     text = message.get("text", "")
@@ -258,13 +293,111 @@ async def telegram_webhook(request: Request):
             "chat_id": chat["id"],
             "text": (
                 "🔥 Добро пожаловать в LUDOMAN Case!\n\n"
-                "Открывай приложение, изучай кейсы "
-                "и собирай свою коллекцию.\n\n"
+                "Открывай приложение и собирай свою коллекцию.\n"
                 "Нажми кнопку меню бота, чтобы открыть Mini App."
             ),
         })
+        return {"ok": True}
+
+    payment = message.get("successful_payment")
+    if not payment:
+        return {"ok": True}
+
+    payload = payment.get("invoice_payload", "")
+    charge_id = payment.get("telegram_payment_charge_id", "")
+    telegram_id = message.get("from", {}).get("id")
+    amount = payment.get("total_amount")
+    currency = payment.get("currency")
+
+    if not payload or not charge_id or not telegram_id:
+        print("Платёж получен с неполными данными.")
+        return {"ok": True}
+
+    # 3. Фиксируем подтверждённый платёж.
+    try:
+        with connect_db() as conn:
+            order = conn.execute("""
+                SELECT telegram_id, price, status
+                FROM star_orders
+                WHERE payload = %s
+                FOR UPDATE
+            """, (payload,)).fetchone()
+
+            if not order:
+                print(f"Заказ не найден для платежа {charge_id}")
+                return {"ok": True}
+
+            if order[0] != telegram_id or order[1] != amount or currency != "XTR":
+                print(f"Несовпадение данных платежа {charge_id}")
+                return {"ok": True}
+
+            if order[2] in ("paid", "delivered", "delivery_failed"):
+                return {"ok": True}
+
+            conn.execute("""
+                UPDATE star_orders
+                SET status = 'paid',
+                    telegram_payment_charge_id = %s,
+                    paid_at = NOW()
+                WHERE payload = %s AND status = 'pending'
+            """, (charge_id, payload))
+
+    except Exception as exc:
+        print(f"Не удалось сохранить платёж {charge_id}: {exc}")
+        raise HTTPException(500, "Не удалось сохранить платёж")
+
+    # 4. Получаем каталог подарков и отправляем случайный доступный.
+    try:
+        result = telegram_api("getAvailableGifts", {})
+        gifts = result.get("gifts", [])
+
+        if not gifts:
+            raise RuntimeError("Telegram не вернул доступных подарков")
+
+        gift = secrets.choice(gifts)
+        gift_id = str(gift["id"])
+
+        telegram_api("sendGift", {
+            "user_id": telegram_id,
+            "gift_id": gift_id,
+        })
+
+        with connect_db() as conn:
+            conn.execute("""
+                UPDATE star_orders
+                SET status = 'delivered',
+                    gift_id = %s,
+                    gift_name = %s,
+                    delivered_at = NOW()
+                WHERE payload = %s AND status = 'paid'
+            """, (
+                gift_id,
+                gift.get("sticker", {}).get("emoji", "Telegram Gift"),
+                payload,
+            ))
+
+        telegram_api("sendMessage", {
+            "chat_id": telegram_id,
+            "text": (
+                "🎉 Оплата получена!\n"
+                "Подарок отправлен тебе от LUDOMAN Case."
+            ),
+        })
+
+    except Exception as exc:
+        print(f"Не удалось выдать подарок для заказа {payload}: {exc}")
+        with connect_db() as conn:
+            conn.execute("""
+                UPDATE star_orders
+                SET status = 'delivery_failed'
+                WHERE payload = %s AND status = 'paid'
+            """, (payload,))
+
+        # Не повторяем отправку автоматически: сначала нужно
+        # проверить, не был ли подарок уже отправлен Telegram.
 
     return {"ok": True}
+    
     
 
 
