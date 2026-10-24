@@ -83,6 +83,21 @@ REWARDS = [
 ]
 
 CASE_PRICES = {100, 250, 500}
+# Кейсы за Telegram Stars
+STAR_CASES = {
+    "start": {
+        "title": "LUDOMAN START",
+        "price": 50,
+    },
+    "pro": {
+        "title": "LUDOMAN PRO",
+        "price": 100,
+    },
+    "vip": {
+        "title": "LUDOMAN VIP",
+        "price": 250,
+    },
+}
 
 
 def connect_db():
