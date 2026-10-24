@@ -746,3 +746,70 @@ document.addEventListener("DOMContentLoaded", async () => {
     try {
       const data = await api("/api/leaderboard");
       
+      const players = Array.isArray(data)
+        ? data
+        : (data.players || []);
+
+      target.innerHTML = `
+        <div class="panel" style="margin-top:12px">
+          <h3>🏆 Рейтинг игроков</h3>
+          ${
+            players.length
+              ? players.map((item, index) => `
+                  <div class="item">
+                    <div class="item-info">
+                      <strong>${index + 1}. ${
+                        escapeHTML(item.first_name || item.username || item.name || "Игрок")
+                      }</strong>
+                    </div>
+                    <strong>${number(item.opens || 0)} кейсов</strong>
+                  </div>
+                `).join("")
+              : '<p class="muted">Пока игроков нет.</p>'
+          }
+        </div>
+      `;
+    } catch (error) {
+      target.textContent = error.message || "Не удалось загрузить рейтинг.";
+    }
+  }
+
+  function renderBalance() {
+    const balance = Number(player?.star_balance || 0);
+    const headerBalance = $("#balance");
+    const topupBalance = $("#topup-balance");
+
+    if (headerBalance) headerBalance.textContent = number(balance);
+    if (topupBalance) topupBalance.textContent = number(balance);
+  }
+
+  async function refreshData() {
+    const data = await api("/api/me");
+    player = data;
+
+    if (data.user && data.star_balance === undefined) {
+      player.star_balance = Number(data.balance || 0);
+    }
+
+    renderBalance();
+    renderProfile();
+    renderInventory(Array.isArray(data.inventory) ? data.inventory : []);
+  }
+
+  renderTopup();
+  renderCases();
+  showTab("cases");
+
+  if (!tg?.initData) {
+    notify("Открой LUDOMAN CASE через Telegram, чтобы загрузить профиль и играть.");
+    renderInventory([]);
+  } else {
+    try {
+      await refreshData();
+    } catch (error) {
+      notify(error.message || "Не удалось загрузить профиль.", true);
+    }
+  }
+});
+
+      
