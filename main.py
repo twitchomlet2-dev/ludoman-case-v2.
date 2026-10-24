@@ -178,7 +178,7 @@ def init_db():
             ALTER TABLE inventory
             ADD COLUMN IF NOT EXISTS delivery_status TEXT
         """)
-        conn.execute("""a
+        conn.execute("""
             ALTER TABLE inventory
             ADD COLUMN IF NOT EXISTS delivery_error TEXT
         """)
