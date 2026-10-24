@@ -13,6 +13,9 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from pathlib import Path
+from fastapi import Request
+from urllib.request import Request as URLRequest, urlopen
+from urllib.error import URLError
 
 BASE_DIR = Path(__file__).resolve().parent
 WEB_DIR = BASE_DIR / "web"
@@ -21,6 +24,48 @@ BOT_TOKEN = os.environ.get("BOT_TOKEN", "")
 DATABASE_URL = os.environ.get("DATABASE_URL", "")
 
 app = FastAPI(title="LUDOMAN Case")
+
+TELEGRAM_WEBHOOK_SECRET = os.environ.get("TELEGRAM_WEBHOOK_SECRET", "")
+
+
+def telegram_api(method: str, payload: dict):
+    if not BOT_TOKEN:
+        raise RuntimeError("BOT_TOKEN не задан")
+
+    url = f"https://api.telegram.org/bot{BOT_TOKEN}/{method}"
+    data = json.dumps(payload).encode("utf-8")
+
+    request = URLRequest(
+        url,
+        data=data,
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+
+    with urlopen(request, timeout=15) as response:
+        result = json.loads(response.read().decode("utf-8"))
+
+    if not result.get("ok"):
+        raise RuntimeError(f"Telegram API error: {result.get('description', 'unknown')}")
+
+    return result["result"]
+
+
+def setup_telegram_webhook():
+    if not BOT_TOKEN or not TELEGRAM_WEBHOOK_SECRET:
+        print("Webhook не настроен: проверь BOT_TOKEN и TELEGRAM_WEBHOOK_SECRET")
+        return
+
+    try:
+        result = telegram_api("setWebhook", {
+            "url": "https://ludoman-case-v2.onrender.com/telegram/webhook",
+            "secret_token": TELEGRAM_WEBHOOK_SECRET,
+            "allowed_updates": ["message", "pre_checkout_query"],
+        })
+        print(f"Telegram webhook configured: {result}")
+    except Exception as exc:
+        print(f"Не удалось настроить Telegram webhook: {exc}")
+        
 
 if not WEB_DIR.is_dir():
     raise RuntimeError("Папка web не найдена рядом с main.py")
@@ -77,6 +122,7 @@ def init_db():
 @app.on_event("startup")
 def startup():
     init_db()
+    setup_telegram_webhook()
 
 
 def authenticate(init_data: str):
@@ -156,6 +202,40 @@ def home():
 @app.get("/health")
 def health():
     return {"status": "ok", "app": "LUDOMAN Case"}
+    
+@app.post("/telegram/webhook")
+async def telegram_webhook(request: Request):
+    if not TELEGRAM_WEBHOOK_SECRET:
+        raise HTTPException(503, "Webhook secret не настроен")
+
+    received_secret = request.headers.get(
+        "X-Telegram-Bot-Api-Secret-Token", ""
+    )
+
+    if not hmac.compare_digest(
+        received_secret, TELEGRAM_WEBHOOK_SECRET
+    ):
+        raise HTTPException(403, "Invalid webhook secret")
+
+    update = await request.json()
+
+    message = update.get("message", {})
+    chat = message.get("chat", {})
+    text = message.get("text", "")
+
+    if text == "/start" and chat.get("type") == "private":
+        telegram_api("sendMessage", {
+            "chat_id": chat["id"],
+            "text": (
+                "🔥 Добро пожаловать в LUDOMAN Case!\n\n"
+                "Открывай приложение, изучай кейсы "
+                "и собирай свою коллекцию.\n\n"
+                "Нажми кнопку меню бота, чтобы открыть Mini App."
+            ),
+        })
+
+    return {"ok": True}
+    
 
 
 @app.get("/api/me")
