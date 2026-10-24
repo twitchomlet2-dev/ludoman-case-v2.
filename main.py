@@ -822,6 +822,94 @@ def sell_inventory_item(
     }
 
 
+class ClaimGiftRequest(BaseModel):
+    item_id: int
+
+
+@app.post("/api/inventory/claim-gift")
+def claim_gift(
+    body: ClaimGiftRequest,
+    x_telegram_init_data: str = Header(default="")
+):
+    player = get_player(x_telegram_init_data)
+    telegram_id = int(player[0])
+
+    # Атомарно резервируем именно подарок этого игрока.
+    with connect_db() as conn:
+        item = conn.execute("""
+            UPDATE inventory
+            SET delivery_status = 'sending',
+                delivery_error = NULL
+            WHERE id = %s
+              AND telegram_id = %s
+              AND reward_type = 'telegram_gift'
+              AND delivery_status = 'pending'
+            RETURNING id, gift_id, name
+        """, (body.item_id, telegram_id)).fetchone()
+
+    if not item:
+        raise HTTPException(
+            409,
+            "Подарок уже получен, обрабатывается или недоступен."
+        )
+
+    item_id, gift_id, gift_name = item
+
+    if not gift_id:
+        with connect_db() as conn:
+            conn.execute("""
+                UPDATE inventory
+                SET delivery_status = 'failed',
+                    delivery_error = 'Не задан gift_id'
+                WHERE id = %s AND telegram_id = %s
+            """, (item_id, telegram_id))
+        raise HTTPException(409, "У подарка отсутствует Telegram ID.")
+
+    try:
+        # Отправляем подарок только от имени бота.
+        telegram_api("sendGift", {
+            "user_id": telegram_id,
+            "gift_id": gift_id
+        })
+
+    except Exception as exc:
+        # Не повторяем отправку автоматически:
+        # при сетевом тайм-ауте результат может быть неизвестен.
+        with connect_db() as conn:
+            conn.execute("""
+                UPDATE inventory
+                SET delivery_status = 'failed',
+                    delivery_error = %s
+                WHERE id = %s
+                  AND telegram_id = %s
+                  AND delivery_status = 'sending'
+            """, (str(exc)[:1000], item_id, telegram_id))
+
+        print(f"Gift delivery failed for inventory item {item_id}: {exc}")
+        raise HTTPException(
+            502,
+            "Не удалось подтвердить выдачу. Обратись в поддержку перед повторной попыткой."
+        ) from exc
+
+    with connect_db() as conn:
+        conn.execute("""
+            UPDATE inventory
+            SET delivery_status = 'delivered',
+                delivery_error = NULL,
+                delivered_at = NOW()
+            WHERE id = %s
+              AND telegram_id = %s
+              AND delivery_status = 'sending'
+        """, (item_id, telegram_id))
+
+    return {
+        "ok": True,
+        "item_id": item_id,
+        "status": "delivered",
+        "message": "Подарок отправлен в Telegram."
+    }
+    
+
 @app.get("/api/leaderboard")
 def leaderboard():
     with connect_db() as conn:
