@@ -6,13 +6,17 @@ document.addEventListener("DOMContentLoaded", () => {
     tg.expand();
   }
 
-const savedBalance = localStorage.getItem("ludoman_balance");
+let balance = 1000;
 
-let balance = savedBalance !== null
-  ? Number(savedBalance)
-  : 1000;
-  const balanceElement = document.getElementById("balance");
+try {
+  const savedBalance = localStorage.getItem("ludoman_balance");
 
+  if (savedBalance !== null && Number.isFinite(Number(savedBalance))) {
+    balance = Number(savedBalance);
+  }
+} catch (error) {
+  console.log("Не удалось загрузить баланс:", error);
+}
   const rewards = [
     { icon: "🪙", name: "Монеты", desc: "Немного виртуальных монет!", rarity: "Обычный" },
     { icon: "💎", name: "Кристалл", desc: "Редкая демо-награда!", rarity: "Редкий" },
@@ -92,6 +96,13 @@ let balance = savedBalance !== null
   function updateBalance() {
   if (balanceElement) {
     balanceElement.textContent = balance;
+  }
+
+  try {
+    localStorage.setItem("ludoman_balance", String(balance));
+  } catch (error) {
+    console.log("Не удалось сохранить баланс:", error);
+  }
   }
 
   localStorage.setItem("ludoman_balance", String(balance));
