@@ -1,5 +1,4 @@
-
-document.addEventListener("DOMContentLoaded", () => {
+document.addEventListener("DOMContentLoaded", async () => {
   const tg = window.Telegram?.WebApp;
 
   if (tg) {
@@ -7,844 +6,644 @@ document.addEventListener("DOMContentLoaded", () => {
     tg.expand();
   }
 
-  // Баланс и состояние прокрутки
-  let balance = 1000;
-  let opening = false;
-  let spinTimer = null;
+  const app = document.querySelector("#app");
+  const balanceEl = document.querySelector("#balance");
+  const inventoryEl = document.querySelector("#inventory");
+  const profileEl = document.querySelector("#profile");
+  const animationEl = document.querySelector("#case-animation");
 
-  try {
-    const savedBalance = localStorage.getItem("ludoman_balance");
-    if (savedBalance !== null && Number.isFinite(Number(savedBalance))) {
-      balance = Math.max(0, Number(savedBalance));
-    }
-  } catch (error) {
-    console.log("Ошибка загрузки баланса", error);
-  }
+  let player = null;
+  let busy = false;
 
-  // Инвентарь
-  let inventory = [];
-
-  try {
-    const saved = JSON.parse(
-      localStorage.getItem("ludoman_inventory") || "[]"
-    );
-
-    if (Array.isArray(saved)) {
-      inventory = saved.filter(item =>
-        item &&
-        typeof item.name === "string" &&
-        typeof item.icon === "string" &&
-        typeof item.rarity === "string" &&
-        typeof item.desc === "string"
-      );
-    }
-  } catch (error) {
-    console.log("Ошибка загрузки инвентаря", error);
-  }
-
-  // Статистика открытий
-  let stats = {
-    opens: 0,
-    spent: 0,
-    wins: 0,
-    history: []
-  };
-
-  try {
-    const saved = JSON.parse(
-      localStorage.getItem("ludoman_stats") || "{}"
-    );
-
-    stats.opens = Math.max(0, Number(saved.opens) || 0);
-    stats.spent = Math.max(0, Number(saved.spent) || 0);
-    stats.wins = Math.max(0, Number(saved.wins) || 0);
-
-    if (Array.isArray(saved.history)) {
-      stats.history = saved.history
-        .filter(item =>
-          item &&
-          typeof item.name === "string" &&
-          typeof item.icon === "string"
-        )
-        .slice(-10);
-    }
-  } catch (error) {
-    console.log("Ошибка загрузки статистики", error);
-  }
-
-  function saveStats() {
-    try {
-      localStorage.setItem("ludoman_stats", JSON.stringify(stats));
-    } catch (error) {
-      console.log("Ошибка сохранения статистики", error);
-    }
-  }
-
-  // Данные игрока Telegram
-  const telegramUser = tg?.initDataUnsafe?.user;
-  const playerName = telegramUser
-    ? [telegramUser.first_name, telegramUser.last_name]
-        .filter(Boolean)
-        .join(" ")
-    : "Игрок LUDOMAN";
-
-  const playerId = telegramUser?.id
-    ? String(telegramUser.id)
-    : "Недоступен вне Telegram";
-
-  // Награды
-  const rewards = [
-    {
-      icon: "🪙",
-      name: "Монеты",
-      desc: "Награда за открытие кейса",
-      rarity: "ОБЫЧНЫЙ"
-    },
-    {
-      icon: "💎",
-      name: "Кристалл",
-      desc: "Редкий коллекционный предмет",
-      rarity: "РЕДКИЙ"
-    },
-    {
-      icon: "⚡",
-      name: "Энергия",
-      desc: "Энергия LUDOMAN",
-      rarity: "ОБЫЧНЫЙ"
-    },
-    {
-      icon: "👑",
-      name: "Корона",
-      desc: "Особая награда",
-      rarity: "ЭПИЧЕСКИЙ"
-    },
-    {
-      icon: "🎁",
-      name: "Подарок",
-      desc: "Сюрприз из кейса",
-      rarity: "РЕДКИЙ"
-    },
-    {
-      icon: "🔥",
-      name: "Огонь",
-      desc: "Огненный предмет",
-      rarity: "ЭПИЧЕСКИЙ"
-    },
-    {
-      icon: "🐉",
-      name: "Дракон",
-      desc: "Легендарная награда",
-      rarity: "ЛЕГЕНДАРНЫЙ"
-    }
-  ];
-
-  // Оформление
   const style = document.createElement("style");
-
   style.textContent = `
-    .lc-overlay {
-      position: fixed;
-      inset: 0;
-      z-index: 9999;
+    :root {
+      --lime: #c6ff00;
+      --bg: #101010;
+      --panel: #1b1b1b;
+      --text: #f5f5f5;
+      --muted: #999;
+    }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: Arial, sans-serif;
+      padding-bottom: 30px;
+    }
+
+    .top-bar {
+      padding: 18px 14px;
       display: flex;
       align-items: center;
-      justify-content: center;
-      padding: 16px;
-      background: rgba(0,0,0,.88);
-      backdrop-filter: blur(7px);
+      justify-content: space-between;
+      gap: 10px;
+      border-bottom: 1px solid #303030;
+      flex-wrap: wrap;
     }
 
-    .lc-panel {
-      width: 100%;
-      max-width: 420px;
-      max-height: 88vh;
-      overflow-y: auto;
-      box-sizing: border-box;
-      padding: 22px 16px;
-      border: 1px solid #b6ff00;
-      border-radius: 20px;
-      background: #10120c;
-      color: white;
-      text-align: center;
-      font-family: Arial, sans-serif;
-    }
-
-    .lc-title {
-      margin: 0 0 8px;
-      color: #c5ff36;
-      font-size: 23px;
+    .top-bar h1 {
+      font-size: 21px;
+      margin: 0;
       font-weight: 900;
     }
 
-    .lc-subtitle {
-      margin-bottom: 20px;
-      color: #aaa;
+    .top-bar h1 span {
+      color: var(--lime);
+    }
+
+    .balance-box {
+      background: #222;
+      padding: 10px 12px;
+      border-radius: 12px;
+      font-size: 13px;
+    }
+
+    #balance {
+      color: var(--lime);
+      font-weight: bold;
+    }
+
+    main {
+      max-width: 700px;
+      margin: auto;
+      padding: 14px;
+    }
+
+    h2 {
+      font-size: 21px;
+    }
+
+    .cases {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(145px, 1fr));
+      gap: 12px;
+    }
+
+    .case-card, .panel {
+      background: var(--panel);
+      border: 1px solid #303030;
+      border-radius: 16px;
+      padding: 16px;
+      box-sizing: border-box;
+    }
+
+    .case-card {
+      text-align: center;
+    }
+
+    .case-card h3 {
+      font-size: 16px;
+    }
+
+    .case-card p {
+      color: var(--muted);
       font-size: 14px;
     }
 
-    .lc-window {
-      position: relative;
+    button {
+      cursor: pointer;
+      font-weight: bold;
+      border: none;
+      border-radius: 11px;
+      padding: 12px;
+      background: var(--lime);
+      color: #101010;
+    }
+
+    button:disabled {
+      opacity: .45;
+      cursor: not-allowed;
+    }
+
+    .open-btn {
       width: 100%;
-      height: 112px;
-      margin: 22px 0;
-      overflow: hidden;
-      border: 1px solid #393f2c;
-      border-radius: 12px;
-      background: #191c14;
+      font-size: 13px;
     }
 
-    .lc-window::before {
-      content: "";
-      position: absolute;
-      z-index: 2;
-      top: 0;
-      bottom: 0;
-      left: 50%;
-      width: 3px;
-      transform: translateX(-50%);
-      background: #c5ff36;
-      box-shadow: 0 0 12px #b6ff00;
-      pointer-events: none;
-    }
-
-    .lc-track {
-      position: absolute;
-      top: 0;
-      left: 0;
+    .bottom-menu {
       display: flex;
-      height: 100%;
-      will-change: transform;
+      gap: 10px;
+      margin: 22px 0;
     }
 
-    .lc-item {
-      flex: 0 0 88px;
-      width: 88px;
-      height: 100%;
+    .bottom-menu button {
+      flex: 1;
+    }
+
+    .panel {
+      margin: 14px 0;
+      overflow-wrap: anywhere;
+    }
+
+    .panel h3 {
+      margin-top: 0;
+    }
+
+    .item {
+      padding: 12px 0;
+      border-bottom: 1px solid #333;
+    }
+
+    .item:last-child {
+      border-bottom: none;
+    }
+
+    .muted {
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .notice {
+      padding: 14px;
+      margin: 12px 0;
+      border-radius: 12px;
+      background: #252525;
+      border: 1px solid #444;
+      line-height: 1.5;
+    }
+
+    .notice.error {
+      border-color: #ff5757;
+    }
+
+    #case-animation:empty {
+      display: none;
+    }
+
+    .roulette {
+      margin: 18px 0;
+      padding: 15px;
+      border: 1px solid #333;
+      background: #171717;
+      border-radius: 16px;
+      overflow: hidden;
+      text-align: center;
+    }
+
+    .roulette-track {
+      min-height: 100px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+    }
+
+    .roulette-card {
+      flex: 0 0 120px;
+      min-height: 90px;
+      border: 1px solid #444;
+      background: #252525;
+      border-radius: 12px;
       display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      box-sizing: border-box;
-      border-right: 1px solid #303426;
-      gap: 7px;
-    }
-
-    .lc-item-icon {
-      font-size: 34px;
-    }
-
-    .lc-item-name {
-      max-width: 82px;
-      padding: 0 3px;
-      overflow: hidden;
-      color: #ddd;
-      font-size: 10px;
-      text-align: center;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-
-    .lc-status {
-      min-height: 20px;
-      color: #c5ff36;
-      font-size: 14px;
-      font-weight: 900;
-    }
-
-    .lc-prize {
-      margin: 14px 0;
-    }
-
-    .lc-prize-icon {
-      font-size: 64px;
-    }
-
-    .lc-prize-name {
-      margin: 8px 0;
-      font-size: 22px;
-      font-weight: 900;
-    }
-
-    .lc-prize-rarity {
-      color: #c5ff36;
-      font-size: 13px;
-      font-weight: 900;
-    }
-
-    .lc-prize-desc {
-      margin-top: 8px;
-      color: #aaa;
+      gap: 8px;
+      overflow-wrap: anywhere;
       font-size: 13px;
     }
 
-    .lc-hidden {
+    .roulette-card .emoji {
+      font-size: 30px;
+    }
+
+    .win {
+      color: var(--lime);
+      font-weight: bold;
+      margin-top: 14px;
+    }
+
+    .hidden {
       display: none !important;
     }
 
-    .lc-button {
-      width: 100%;
-      min-height: 46px;
-      padding: 12px;
-      border: 1px solid #b6ff00;
-      border-radius: 12px;
-      background: #c5ff36;
-      color: #10120c;
-      font-size: 15px;
-      font-weight: 900;
-      cursor: pointer;
-    }
-
-    .lc-inventory-button,
-    .lc-profile-button {
-      position: fixed;
-      bottom: 18px;
-      z-index: 9998;
-      padding: 12px 13px;
-      border: 1px solid #b6ff00;
-      border-radius: 14px;
-      background: #10120c;
-      color: #c5ff36;
-      font-weight: 900;
-      font-size: 13px;
-      cursor: pointer;
-    }
-
-    .lc-inventory-button {
-      right: 12px;
-    }
-
-    .lc-profile-button {
-      left: 12px;
-    }
-
-    .lc-inventory-grid {
-      display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 10px;
-    }
-
-    .lc-inventory-card,
-    .lc-stat-card {
-      min-width: 0;
-      padding: 14px 8px;
-      overflow-wrap: anywhere;
-      border: 1px solid #373b2e;
-      border-radius: 14px;
-      background: #191c14;
-    }
-
-    .lc-stat-grid {
-      display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 10px;
-      margin: 16px 0;
-    }
-
-    .lc-stat-number {
-      margin-top: 8px;
-      color: #c5ff36;
-      font-size: 25px;
-      font-weight: 900;
-    }
-
-    .lc-stat-label {
-      color: #aaa;
-      font-size: 12px;
-    }
-
-    .lc-player-name {
-      margin: 12px 0 6px;
-      font-size: 20px;
-      font-weight: 900;
-      overflow-wrap: anywhere;
-    }
-
-    .lc-player-id {
-      color: #aaa;
-      font-size: 12px;
-      overflow-wrap: anywhere;
-    }
-
-    .lc-history-row {
+    .section-title {
       display: flex;
       align-items: center;
+      justify-content: space-between;
       gap: 10px;
-      padding: 10px 0;
-      text-align: left;
-      border-bottom: 1px solid #303426;
     }
 
-    .lc-history-icon {
-      font-size: 28px;
-    }
-
-    .lc-history-name {
-      font-weight: 800;
-    }
-
-    .lc-history-rarity {
-      margin-top: 4px;
-      color: #c5ff36;
-      font-size: 11px;
+    .small-btn {
+      padding: 9px 12px;
+      font-size: 12px;
     }
   `;
-
   document.head.appendChild(style);
 
-  // Обновление баланса
-  function updateBalance() {
-    const element = document.getElementById("balance");
+  function notify(message, isError = false) {
+    let el = document.querySelector("#app-notice");
 
-    if (element) {
-      element.textContent = balance.toLocaleString("ru-RU");
+    if (!el) {
+      el = document.createElement("div");
+      el.id = "app-notice";
+      el.className = "notice";
+      app.prepend(el);
     }
 
-    try {
-      localStorage.setItem("ludoman_balance", String(balance));
-    } catch (error) {
-      console.log("Ошибка сохранения баланса", error);
-    }
+    el.textContent = message;
+    el.classList.toggle("error", isError);
+    el.classList.remove("hidden");
   }
 
-  // Кнопка инвентаря
-  const inventoryButton = document.createElement("button");
-  inventoryButton.className = "lc-inventory-button";
-  document.body.appendChild(inventoryButton);
-
-  function saveInventory() {
-    try {
-      localStorage.setItem("ludoman_inventory", JSON.stringify(inventory));
-    } catch (error) {
-      console.log("Ошибка сохранения инвентаря", error);
-    }
-
-    inventoryButton.textContent = `🎒 Инвентарь (${inventory.length})`;
+  function clearNotice() {
+    const el = document.querySelector("#app-notice");
+    if (el) el.classList.add("hidden");
   }
 
-  // Создание окна
-  function createOverlay(id) {
-    const overlay = document.createElement("div");
-    overlay.className = "lc-overlay";
-    overlay.id = id;
+  async function api(path, options = {}) {
+    if (!tg?.initData) {
+      throw new Error("Открой приложение через Telegram.");
+    }
 
-    const panel = document.createElement("div");
-    panel.className = "lc-panel";
-
-    overlay.appendChild(panel);
-    document.body.appendChild(overlay);
-
-    overlay.addEventListener("click", event => {
-      if (event.target === overlay) overlay.remove();
+    const response = await fetch(path, {
+      ...options,
+      headers: {
+        "Content-Type": "application/json",
+        "X-Telegram-Init-Data": tg.initData,
+        ...(options.headers || {})
+      }
     });
 
-    return { overlay, panel };
-  }
+    let data;
 
-  // Кнопка закрытия окна
-  function addCloseButton(panel, overlay) {
-    const close = document.createElement("button");
-    close.className = "lc-button";
-    close.textContent = "Закрыть";
-    close.style.marginTop = "16px";
-    close.addEventListener("click", () => overlay.remove());
-    panel.appendChild(close);
-  }
-
-  // Инвентарь
-  function showInventory() {
-    if (document.getElementById("lc-inventory-overlay")) return;
-
-    const { overlay, panel } = createOverlay("lc-inventory-overlay");
-
-    const title = document.createElement("h2");
-    title.className = "lc-title";
-    title.textContent = "МОЙ ИНВЕНТАРЬ";
-
-    const count = document.createElement("div");
-    count.className = "lc-subtitle";
-    count.textContent = `Предметов: ${inventory.length}`;
-
-    panel.append(title, count);
-
-    if (inventory.length === 0) {
-      const empty = document.createElement("p");
-      empty.textContent = "Пока пусто. Открой кейс, чтобы получить предмет!";
-      empty.style.color = "#aaa";
-      panel.appendChild(empty);
-    } else {
-      const grid = document.createElement("div");
-      grid.className = "lc-inventory-grid";
-
-      inventory.slice().reverse().forEach(item => {
-        const card = document.createElement("div");
-        card.className = "lc-inventory-card";
-
-        const icon = document.createElement("div");
-        icon.textContent = item.icon;
-        icon.style.fontSize = "34px";
-
-        const name = document.createElement("div");
-        name.textContent = item.name;
-        name.style.cssText = "font-weight:900;margin:8px 0;";
-
-        const rarity = document.createElement("div");
-        rarity.textContent = item.rarity;
-        rarity.style.cssText = "font-size:12px;color:#c5ff36;";
-
-        card.append(icon, name, rarity);
-        grid.appendChild(card);
-      });
-
-      panel.appendChild(grid);
+    try {
+      data = await response.json();
+    } catch {
+      throw new Error("Сервер вернул неверный ответ.");
     }
 
-    addCloseButton(panel, overlay);
+    if (!response.ok) {
+      throw new Error(
+        data.detail || data.message || "Ошибка обращения к серверу."
+      );
+    }
+
+    return data;
   }
 
-  inventoryButton.addEventListener("click", showInventory);
+  function escapeHTML(value) {
+    return String(value ?? "").replace(/[&<>"']/g, char => ({
+      "&": "&amp;",
+      "<": "&lt;",
+      ">": "&gt;",
+      '"': "&quot;",
+      "'": "&#039;"
+    })[char]);
+  }
 
-  // Кнопка профиля
-  const profileButton = document.createElement("button");
-  profileButton.className = "lc-profile-button";
-  profileButton.textContent = "👤 Профиль";
-  document.body.appendChild(profileButton);
+  function rewardName(reward) {
+    if (typeof reward === "string") return reward;
 
-  // Окно профиля и статистики
-  function showProfile() {
-    if (document.getElementById("lc-profile-overlay")) return;
+    return reward?.name ||
+      reward?.title ||
+      reward?.emoji ||
+      "Награда";
+  }
 
-    const { overlay, panel } = createOverlay("lc-profile-overlay");
+  function rewardEmoji(reward) {
+    if (typeof reward === "string") {
+      const match = reward.match(/^\p{Extended_Pictographic}/u);
+      return match ? match[0] : "🎁";
+    }
 
-    const title = document.createElement("h2");
-    title.className = "lc-title";
-    title.textContent = "ПРОФИЛЬ ИГРОКА";
+    return reward?.emoji || "🎁";
+  }
 
-    const avatar = document.createElement("div");
-    avatar.textContent = "👤";
-    avatar.style.fontSize = "54px";
+  function rewardDescription(reward) {
+    if (typeof reward === "string") return reward;
 
-    const name = document.createElement("div");
-    name.className = "lc-player-name";
-    name.textContent = playerName;
+    const name = rewardName(reward);
+    const emoji = rewardEmoji(reward);
 
-    const id = document.createElement("div");
-    id.className = "lc-player-id";
-    id.textContent = `Telegram ID: ${playerId}`;
+    return name.startsWith(emoji) ? name : `${emoji} ${name}`;
+  }
 
-    panel.append(title, avatar, name, id);
+  function renderBalance() {
+    if (balanceEl && player) {
+      balanceEl.textContent = Number(player.balance || 0).toLocaleString("ru-RU");
+    }
+  }
 
-    const statsGrid = document.createElement("div");
-    statsGrid.className = "lc-stat-grid";
+  function renderInventory(items = []) {
+    if (!inventoryEl) return;
 
-    const statItems = [
-      ["🎁", stats.opens, "Открытий кейсов"],
-      ["🪙", stats.spent.toLocaleString("ru-RU"), "Монет потрачено"],
-      ["🏆", stats.wins, "Выиграно предметов"],
-      ["🎒", inventory.length, "Предметов в инвентаре"]
-    ];
+    if (!items.length) {
+      inventoryEl.innerHTML = `
+        <div class="panel">
+          <h3>🎒 Инвентарь</h3>
+          <p class="muted">Пока здесь пусто. Открой свой первый кейс!</p>
+        </div>
+      `;
+      return;
+    }
 
-    statItems.forEach(([icon, value, label]) => {
-      const card = document.createElement("div");
-      card.className = "lc-stat-card";
+    inventoryEl.innerHTML = `
+      <div class="panel">
+        <h3>🎒 Инвентарь</h3>
+        ${items.map(item => {
+          const reward = item.reward ?? item.item ?? item;
+          const date = item.created_at
+            ? new Date(item.created_at).toLocaleString("ru-RU")
+            : "";
 
-      const emoji = document.createElement("div");
-      emoji.textContent = icon;
-      emoji.style.fontSize = "25px";
+          return `
+            <div class="item">
+              <strong>${escapeHTML(rewardDescription(reward))}</strong>
+              ${date ? `<div class="muted">${escapeHTML(date)}</div>` : ""}
+            </div>
+          `;
+        }).join("")}
+      </div>
+    `;
+  }
 
-      const number = document.createElement("div");
-      number.className = "lc-stat-number";
-      number.textContent = String(value);
+  function renderProfile() {
+    if (!profileEl || !player) return;
 
-      const caption = document.createElement("div");
-      caption.className = "lc-stat-label";
-      caption.textContent = label;
+    const name = [
+      player.first_name,
+      player.last_name
+    ].filter(Boolean).join(" ") || player.username || "Игрок";
 
-      card.append(emoji, number, caption);
-      statsGrid.appendChild(card);
+    profileEl.innerHTML = `
+      <div class="panel">
+        <h3>👤 Профиль игрока</h3>
+        <div class="item">
+          <span class="muted">Имя</span><br>
+          <strong>${escapeHTML(name)}</strong>
+        </div>
+        <div class="item">
+          <span class="muted">Telegram ID</span><br>
+          <strong>${escapeHTML(player.telegram_id ?? "—")}</strong>
+        </div>
+        <div class="item">
+          <span class="muted">Открыто кейсов</span><br>
+          <strong>${Number(player.opens || 0)}</strong>
+        </div>
+        <div class="item">
+          <span class="muted">Потрачено монет</span><br>
+          <strong>${Number(player.spent || 0).toLocaleString("ru-RU")} 🪙</strong>
+        </div>
+        <div class="item">
+          <span class="muted">Побед</span><br>
+          <strong>${Number(player.wins || 0)}</strong>
+        </div>
+        <button id="leaderboard-btn" style="width:100%;margin-top:12px">
+          🏆 Рейтинг игроков
+        </button>
+        <div id="leaderboard"></div>
+      </div>
+    `;
+
+    document.querySelector("#leaderboard-btn")
+      ?.addEventListener("click", loadLeaderboard);
+  }
+
+  async function refreshData() {
+    const data = await api("/api/me");
+
+    // Поддерживаем оба варианта: данные игрока внутри user
+    // или непосредственно в корне ответа.
+    player = {
+      ...(data.user || {}),
+      ...data,
+      ...(data.player || {})
+    };
+
+    if (data.user && data.telegram_id == null) {
+      player.telegram_id = data.user.id ?? data.user.telegram_id;
+    }
+
+    player.inventory = data.inventory || player.inventory || [];
+
+    renderBalance();
+    renderProfile();
+    renderInventory(player.inventory);
+  }
+
+  async function loadLeaderboard() {
+    const target = document.querySelector("#leaderboard");
+    if (!target) return;
+
+    target.innerHTML = `<p class="muted">Загружаем рейтинг...</p>`;
+
+    try {
+      const data = await api("/api/leaderboard");
+      const rows = Array.isArray(data) ? data : (data.leaderboard || []);
+
+      if (!rows.length) {
+        target.innerHTML = `<p class="muted">Пока нет участников рейтинга.</p>`;
+        return;
+      }
+
+      target.innerHTML = `
+        <h3>🏆 Топ игроков</h3>
+        ${rows.map((item, index) => {
+          const name = item.first_name ||
+            item.username ||
+            `Игрок ${item.telegram_id ?? ""}`;
+
+          return `
+            <div class="item">
+              <strong>${index + 1}. ${escapeHTML(name)}</strong>
+              <div class="muted">
+                Побед: ${Number(item.wins || 0)}
+                · Кейсов: ${Number(item.opens || 0)}
+              </div>
+            </div>
+          `;
+        }).join("")}
+      `;
+    } catch (error) {
+      target.innerHTML = `
+        <p class="muted">${escapeHTML(error.message)}</p>
+      `;
+    }
+  }
+
+  function showOpening(reward) {
+    if (!animationEl) return Promise.resolve();
+
+    const emoji = rewardEmoji(reward);
+    const name = rewardName(reward);
+
+    animationEl.innerHTML = `
+      <div class="roulette">
+        <h3>🎰 Открытие кейса</h3>
+        <div class="roulette-track">
+          <div class="roulette-card">
+            <span class="emoji">🎁</span>
+            <span>Открываем...</span>
+          </div>
+        </div>
+        <div class="muted">Определяем результат...</div>
+      </div>
+    `;
+
+    const track = animationEl.querySelector(".roulette-track");
+    const roulette = animationEl.querySelector(".roulette");
+
+    const items = Array.from({ length: 17 }, (_, i) => {
+      if (i === 15) {
+        return { emoji, name };
+      }
+
+      const decorations = ["🎁", "💎", "⚡", "👑", "🔥", "🐉", "🪙"];
+      return {
+        emoji: decorations[Math.floor(Math.random() * decorations.length)],
+        name: "Награда"
+      };
     });
 
-    panel.appendChild(statsGrid);
+    track.innerHTML = items.map(item => `
+      <div class="roulette-card">
+        <span class="emoji">${item.emoji}</span>
+        <span>${escapeHTML(item.name)}</span>
+      </div>
+    `).join("");
 
-    const historyTitle = document.createElement("h3");
-    historyTitle.textContent = "ПОСЛЕДНИЕ ВЫИГРЫШИ";
-    historyTitle.style.cssText =
-      "margin:20px 0 10px;color:#c5ff36;font-size:15px;";
+    const cards = track.querySelectorAll(".roulette-card");
+    const winningCard = cards[15];
 
-    panel.appendChild(historyTitle);
+    const distance =
+      winningCard.offsetLeft +
+      winningCard.offsetWidth / 2 -
+      track.clientWidth / 2;
 
-    if (stats.history.length === 0) {
-      const empty = document.createElement("p");
-      empty.textContent = "Здесь появятся твои выигрыши после открытия кейсов.";
-      empty.style.cssText = "color:#aaa;font-size:13px;";
-      panel.appendChild(empty);
-    } else {
-      stats.history.slice().reverse().forEach(item => {
-        const row = document.createElement("div");
-        row.className = "lc-history-row";
+    track.style.justifyContent = "flex-start";
+    track.style.width = "max-content";
+    track.style.transform = "translateX(0)";
 
-        const icon = document.createElement("div");
-        icon.className = "lc-history-icon";
-        icon.textContent = item.icon;
+    return new Promise(resolve => {
+      track.animate(
+        [
+          { transform: "translateX(0)" },
+          { transform: `translateX(-${Math.max(0, distance)}px)` }
+        ],
+        {
+          duration: 4500,
+          easing: "cubic-bezier(.08,.65,.12,1)",
+          fill: "forwards"
+        }
+      ).onfinish = () => {
+        roulette.innerHTML = `
+          <h3>🎉 Поздравляем!</h3>
+          <div style="font-size:55px;margin:18px">${escapeHTML(emoji)}</div>
+          <div class="win">${escapeHTML(name)}</div>
+          <p class="muted">Награда сохранена на сервере.</p>
+          <button id="close-result" style="width:100%;margin-top:12px">
+            Отлично!
+          </button>
+        `;
 
-        const details = document.createElement("div");
+        roulette.querySelector("#close-result")
+          ?.addEventListener("click", () => {
+            animationEl.innerHTML = "";
+          });
 
-        const itemName = document.createElement("div");
-        itemName.className = "lc-history-name";
-        itemName.textContent = item.name;
+        try {
+          tg?.HapticFeedback?.notificationOccurred("success");
+        } catch {}
 
-        const rarity = document.createElement("div");
-        rarity.className = "lc-history-rarity";
-        rarity.textContent = item.rarity || "НАГРАДА";
-
-        details.append(itemName, rarity);
-        row.append(icon, details);
-        panel.appendChild(row);
-      });
-    }
-
-    addCloseButton(panel, overlay);
+        resolve();
+      };
+    });
   }
 
-  profileButton.addEventListener("click", showProfile);
-
-  saveInventory();
-  updateBalance();
-
-  // Предмет на ленте
-  function createTrackItem(reward) {
-    const item = document.createElement("div");
-    item.className = "lc-item";
-
-    const icon = document.createElement("div");
-    icon.className = "lc-item-icon";
-    icon.textContent = reward.icon;
-
-    const name = document.createElement("div");
-    name.className = "lc-item-name";
-    name.textContent = reward.name;
-
-    item.append(icon, name);
-    return item;
-  }
-
-  // Открытие кейса
-  function openCase(button) {
-    if (opening) return;
+  async function openCase(button) {
+    if (busy) return;
 
     const price = Number(button.dataset.price);
 
-    if (!Number.isFinite(price) || price < 0) {
-      alert("У этого кейса указана неправильная цена.");
+    if (![100, 250, 500].includes(price)) {
+      notify("Неизвестная стоимость кейса.", true);
       return;
     }
 
-    if (balance < price) {
-      alert("Недостаточно монет для открытия кейса!");
+    if (!player) {
+      notify("Сначала дождись загрузки профиля.", true);
       return;
     }
 
-    opening = true;
-    balance -= price;
-
-    stats.opens += 1;
-    stats.spent += price;
-    saveStats();
-    updateBalance();
-
-    button.disabled = true;
-    const oldButtonText = button.textContent;
-    button.textContent = "Открываем...";
-
-    const { overlay, panel } = createOverlay("lc-case-overlay");
-
-    const title = document.createElement("h2");
-    title.className = "lc-title";
-    title.textContent = "LUDOMAN CASE";
-
-    const subtitle = document.createElement("div");
-    subtitle.className = "lc-subtitle";
-    subtitle.textContent = "Испытай удачу";
-
-    const viewport = document.createElement("div");
-    viewport.className = "lc-window";
-
-    const track = document.createElement("div");
-    track.className = "lc-track";
-    viewport.appendChild(track);
-
-    const status = document.createElement("div");
-    status.className = "lc-status";
-    status.textContent = "Прокручиваем...";
-
-    const prize = document.createElement("div");
-    prize.className = "lc-prize lc-hidden";
-
-    const prizeIcon = document.createElement("div");
-    prizeIcon.className = "lc-prize-icon";
-
-    const prizeName = document.createElement("div");
-    prizeName.className = "lc-prize-name";
-
-    const prizeRarity = document.createElement("div");
-    prizeRarity.className = "lc-prize-rarity";
-
-    const prizeDesc = document.createElement("div");
-    prizeDesc.className = "lc-prize-desc";
-
-    prize.append(prizeIcon, prizeName, prizeRarity, prizeDesc);
-
-    const closeButton = document.createElement("button");
-    closeButton.className = "lc-button lc-hidden";
-    closeButton.textContent = "Забрать и закрыть";
-
-    panel.append(
-      title,
-      subtitle,
-      viewport,
-      status,
-      prize,
-      closeButton
-    );
-
-    let finished = false;
-    let animation = null;
-
-    const winningIndex = 45;
-    const winningReward = rewards[
-      Math.floor(Math.random() * rewards.length)
-    ];
-    const totalItems = 55;
-
-    for (let i = 0; i < totalItems; i++) {
-      const reward = i === winningIndex
-        ? winningReward
-        : rewards[Math.floor(Math.random() * rewards.length)];
-
-      track.appendChild(createTrackItem(reward));
+    if (Number(player.balance) < price) {
+      notify("Недостаточно монет для открытия кейса.", true);
+      return;
     }
 
-    function finishSpin() {
-      if (finished) return;
-      finished = true;
+    busy = true;
+    clearNotice();
 
-      if (spinTimer) {
-        clearTimeout(spinTimer);
-        spinTimer = null;
-      }
-
-      if (animation) {
-        animation.onfinish = null;
-        animation.oncancel = null;
-        animation.cancel();
-        animation = null;
-      }
-
-      const winningItem = track.children[winningIndex];
-
-      if (winningItem) {
-        const center =
-          winningItem.offsetLeft + winningItem.offsetWidth / 2;
-        const targetX = viewport.clientWidth / 2 - center;
-        track.style.transform = `translateX(${targetX}px)`;
-      }
-
-      status.textContent = "ВЫИГРЫШ!";
-      prizeIcon.textContent = winningReward.icon;
-      prizeName.textContent = winningReward.name;
-      prizeRarity.textContent = winningReward.rarity;
-      prizeDesc.textContent = winningReward.desc;
-
-      prize.classList.remove("lc-hidden");
-      closeButton.classList.remove("lc-hidden");
-
-      const wonItem = {
-        icon: winningReward.icon,
-        name: winningReward.name,
-        desc: winningReward.desc,
-        rarity: winningReward.rarity,
-        date: Date.now()
-      };
-
-      inventory.push(wonItem);
-      stats.wins += 1;
-      stats.history.push(wonItem);
-      stats.history = stats.history.slice(-10);
-
-      saveInventory();
-      saveStats();
-
-      if (tg?.HapticFeedback) {
-        try {
-          tg.HapticFeedback.notificationOccurred("success");
-        } catch (error) {
-          console.log("Вибрация недоступна", error);
-        }
-      }
-    }
-
-    function closeCase() {
-      if (!finished) return;
-
-      overlay.remove();
-      opening = false;
-      button.disabled = false;
-      button.textContent = oldButtonText;
-    }
-
-    closeButton.addEventListener("click", closeCase);
-
-    overlay.addEventListener("click", event => {
-      if (event.target === overlay && finished) {
-        closeCase();
-      }
+    document.querySelectorAll(".open-btn").forEach(btn => {
+      btn.disabled = true;
     });
 
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        if (finished || !overlay.isConnected) return;
-
-        const winningItem = track.children[winningIndex];
-
-        if (!winningItem || viewport.clientWidth === 0) {
-          finishSpin();
-          return;
-        }
-
-        const center =
-          winningItem.offsetLeft + winningItem.offsetWidth / 2;
-        const targetX = viewport.clientWidth / 2 - center;
-
-        try {
-          animation = track.animate(
-            [
-              { transform: "translateX(0px)" },
-              { transform: `translateX(${targetX}px)` }
-            ],
-            {
-              duration: 6500,
-              easing: "cubic-bezier(.08,.65,.12,1)",
-              fill: "forwards"
-                }
-          );
-
-          animation.onfinish = finishSpin;
-          animation.oncancel = () => {
-            if (!finished) finishSpin();
-          };
-        } catch (error) {
-          console.log("Ошибка анимации", error);
-          finishSpin();
-        }
-
-        spinTimer = setTimeout(finishSpin, 7500);
+    try {
+      // Сервер сам списывает монеты и выбирает награду.
+      const result = await api("/api/open", {
+        method: "POST",
+        body: JSON.stringify({ price })
       });
-    });
+
+      if (!result.reward) {
+        throw new Error("Сервер не вернул награду. Обнови приложение.");
+      }
+
+      player.balance = result.balance;
+      renderBalance();
+
+      await showOpening(result.reward);
+
+      // Получаем актуальные профиль и инвентарь из базы.
+      await refreshData();
+
+    } catch (error) {
+      notify(error.message || "Не удалось открыть кейс.", true);
+
+      // Перезагружаем баланс, если сервер мог обработать запрос.
+      try {
+        await refreshData();
+      } catch {}
+    } finally {
+      busy = false;
+
+      document.querySelectorAll(".open-btn").forEach(btn => {
+        btn.disabled = false;
+      });
+    }
   }
 
-  // Кнопки открытия кейсов
-  document
-    .querySelectorAll(".open-btn[data-price]")
-    .forEach(button => {
-      button.addEventListener("click", () => openCase(button));
+  document.querySelectorAll(".open-btn[data-price]").forEach(button => {
+    button.addEventListener("click", () => openCase(button));
+  });
+
+  document.querySelector("#inventory-btn")?.addEventListener("click", () => {
+    inventoryEl?.scrollIntoView({ behavior: "smooth", block: "start" });
+  });
+
+  document.querySelector("#profile-btn")?.addEventListener("click", () => {
+    profileEl?.scrollIntoView({ behavior: "smooth", block: "start" });
+  });
+
+  if (!tg?.initData) {
+    notify("Открой LUDOMAN CASE через Telegram, чтобы загрузить свой профиль.", true);
+    document.querySelectorAll(".open-btn").forEach(btn => {
+      btn.disabled = true;
     });
+    return;
+  }
+
+  try {
+    await refreshData();
+    clearNotice();
+  } catch (error) {
+    notify(
+      "Не удалось загрузить профиль: " + error.message +
+      " Проверь настройки Render и подключение базы данных.",
+      true
+    );
+  }
 });
+                          
